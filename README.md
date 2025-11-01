@@ -16,8 +16,23 @@ npm start
 
 ## 📖 Documentation
 
+### Getting Started
 - **[DEV_GUIDE.md](DEV_GUIDE.md)** - Complete VS Code & Claude development guide
 - **[src/cricket-scorer-complete.html](src/cricket-scorer-complete.html)** - Full source code reference
+
+### Features & Setup
+- **[ANALYTICS_FEATURES.md](ANALYTICS_FEATURES.md)** - Advanced analytics & reports documentation
+- **[MULTI_INNINGS_UPDATE.md](MULTI_INNINGS_UPDATE.md)** - Multi-innings display implementation
+- **[SAVE_LOAD_USAGE.md](SAVE_LOAD_USAGE.md)** - User guide for saving/loading matches
+
+### Firebase Cloud Storage
+- **[FIREBASE_QUICK_START.md](FIREBASE_QUICK_START.md)** - ⚡ 5-minute Firebase setup
+- **[FIREBASE_SETUP_GUIDE.md](FIREBASE_SETUP_GUIDE.md)** - Complete Firebase configuration guide
+- **[firebase-config.js](firebase-config.js)** - Firebase configuration template
+
+### Deployment
+- **[NETLIFY_DEPLOYMENT.md](NETLIFY_DEPLOYMENT.md)** - Deploy to Netlify
+- **[DEPLOYMENT_QUICK_START.md](DEPLOYMENT_QUICK_START.md)** - Quick deployment guide
 
 ## 🎯 For VS Code + Claude Plugin Users
 
@@ -75,6 +90,7 @@ npm run lint        # Lint code with ESLint
 
 ## ✨ Features
 
+### Core Scoring
 - Live ball-by-ball scoring
 - 10 dismissal types with tracking
 - Detailed player statistics
@@ -82,7 +98,21 @@ npm run lint        # Lint code with ESLint
 - Retire not out support
 - Manhattan chart
 - Real-time calculations
-- Print/download scorecard
+
+### Analytics & Reports
+- Match summary with key highlights
+- Player of the Match recommendation
+- Phase-wise performance analysis (Powerplay, Middle, Death)
+- Strategic insights & win probability
+- Batting/bowling comparison charts
+- Strike rate & economy analysis
+
+### Data Management
+- 💻 **Local Storage**: Save to browser (offline support)
+- ☁️ **Cloud Storage**: Save to Firebase (access anywhere)
+- Toggle between local and cloud modes
+- Export CSV and PDF reports
+- Load/delete saved matches
 
 ## 🎓 Learning Path
 

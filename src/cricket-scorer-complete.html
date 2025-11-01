@@ -9,6 +9,11 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -37,6 +42,35 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // Firebase Configuration
+        // IMPORTANT: Replace with your Firebase project credentials
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzsz_Hn5PgQUUm80EFqoWi_65zlfeVleg",
+            authDomain: "http://cricket-scorer-pro-95b9d.firebaseapp.com/",
+            projectId: "cricket-scorer-pro-95b9d",
+            storageBucket: "cricket-scorer-pro-95b9d.firebasestorage.app",
+            messagingSenderId: "354364037961",
+            appId: "1:354364037961:web:228b5d906089b07f38d898",
+            measurementId: "G-NFQRG4XNL5"
+        };
+
+        // Initialize Firebase
+        let db = null;
+        let firebaseInitialized = false;
+
+        try {
+            if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== 'YOUR_API_KEY_HERE') {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                firebaseInitialized = true;
+                console.log('✅ Firebase initialized successfully');
+            } else {
+                console.warn('⚠️ Firebase not configured. Using localStorage only. See firebase-config.js for setup instructions.');
+            }
+        } catch (error) {
+            console.error('❌ Firebase initialization error:', error);
+        }
+
         function CricketScorer() {
             // Setup state
             const [setupComplete, setSetupComplete] = useState(false);
@@ -46,7 +80,7 @@
             const [matchFormat, setMatchFormat] = useState('T20');
             const [team1Players, setTeam1Players] = useState(['', '', '', '', '', '', '', '', '', '', '']);
             const [team2Players, setTeam2Players] = useState(['', '', '', '', '', '', '', '', '', '', '']);
-            
+
             // Match state
             const [battingTeam, setBattingTeam] = useState('team1');
             const [innings, setInnings] = useState(1);
@@ -65,12 +99,12 @@
             const [retiredBatsmen, setRetiredBatsmen] = useState([]);
             const [showReturnModal, setShowReturnModal] = useState(false);
             const [returningFor, setReturningFor] = useState(null);
-            
+
             // Dismissal modal state
             const [showDismissalModal, setShowDismissalModal] = useState(false);
             const [dismissalType, setDismissalType] = useState('');
             const [selectedFielder, setSelectedFielder] = useState(null);
-            
+
             // Extended stats
             const [batsmanStats, setBatsmanStats] = useState({});
             const [bowlerStats, setBowlerStats] = useState({});
@@ -79,10 +113,15 @@
             const [overRuns, setOverRuns] = useState([]);
             const [currentPartnership, setCurrentPartnership] = useState({ runs: 0, balls: 0, batsman1: 0, batsman2: 1 });
             const [extras, setExtras] = useState({ wides: 0, noBalls: 0, byes: 0, legByes: 0 });
-            
+
             // Innings data
             const [innings1Data, setInnings1Data] = useState(null);
             const [innings2Data, setInnings2Data] = useState(null);
+
+            // Save/Load state
+            const [showMatchHistory, setShowMatchHistory] = useState(false);
+            const [storageMode, setStorageMode] = useState('local'); // 'local' or 'cloud'
+            const [cloudMatches, setCloudMatches] = useState([]);
 
             const currentTeamName = battingTeam === 'team1' ? team1Name : team2Name;
             const bowlingTeamName = battingTeam === 'team1' ? team2Name : team1Name;
@@ -104,7 +143,7 @@
             ];
 
             const currentRunRate = overs + (balls / 6) > 0 ? (runs / (overs + balls / 6)).toFixed(2) : '0.00';
-            const requiredRunRate = innings === 2 && target ? 
+            const requiredRunRate = innings === 2 && target ?
                 ((target - runs) / (totalOvers - overs - balls / 6)).toFixed(2) : null;
 
             const formats = [
@@ -194,7 +233,7 @@
 
             const retireBatsman = (batsmanType) => {
                 const batsmanIndex = batsmanType === 'striker' ? striker : nonStriker;
-                
+
                 setBatsmanStats(prev => ({
                     ...prev,
                     [batsmanIndex]: {
@@ -202,28 +241,28 @@
                         status: 'retired not out'
                     }
                 }));
-                
+
                 setRetiredBatsmen(prev => [...prev, batsmanIndex]);
                 setPartnerships(prev => [...prev, { ...currentPartnership, retired: true }]);
-                
-                const nextBatsman = currentPlayers.findIndex((p, i) => 
-                    i !== striker && i !== nonStriker && p.trim() !== '' && 
+
+                const nextBatsman = currentPlayers.findIndex((p, i) =>
+                    i !== striker && i !== nonStriker && p.trim() !== '' &&
                     !ballHistory.some(b => b.wicket && b.outPlayer === i) &&
                     !retiredBatsmen.includes(i) &&
                     !(batsmanStats[i]?.status === 'retired not out')
                 );
-                
+
                 if (nextBatsman === -1) {
                     alert('No more batsmen available!');
                     return;
                 }
-                
+
                 if (batsmanType === 'striker') {
                     setStriker(nextBatsman);
                 } else {
                     setNonStriker(nextBatsman);
                 }
-                
+
                 const newStriker = batsmanType === 'striker' ? nextBatsman : striker;
                 const newNonStriker = batsmanType === 'striker' ? nonStriker : nextBatsman;
                 setCurrentPartnership({ runs: 0, balls: 0, batsman1: newStriker, batsman2: newNonStriker });
@@ -235,9 +274,9 @@
                 } else {
                     setNonStriker(retiredIndex);
                 }
-                
+
                 setRetiredBatsmen(prev => prev.filter(i => i !== retiredIndex));
-                
+
                 setBatsmanStats(prev => ({
                     ...prev,
                     [retiredIndex]: {
@@ -245,7 +284,7 @@
                         status: 'batting'
                     }
                 }));
-                
+
                 setShowReturnModal(false);
                 setReturningFor(null);
             };
@@ -263,14 +302,14 @@
                 }
 
                 const selectedDismissal = dismissalTypes.find(d => d.id === dismissalType);
-                
+
                 if (selectedDismissal.needsFielder && selectedFielder === null) {
                     alert('Please select a fielder');
                     return;
                 }
 
                 setShowDismissalModal(false);
-                
+
                 // Process the wicket with dismissal details
                 processWicket(dismissalType, selectedFielder);
             };
@@ -278,14 +317,14 @@
             const processWicket = (dismissalMethod, fielderIndex) => {
                 const selectedDismissal = dismissalTypes.find(d => d.id === dismissalMethod);
                 const noBowlerCredit = selectedDismissal?.noBowlerCredit || false;
-                
+
                 let newRuns = runs;
                 let newBalls = balls + 1;
                 let newOvers = overs;
                 let newWickets = wickets + 1;
                 let newStriker = striker;
                 let newNonStriker = nonStriker;
-                
+
                 // Create dismissal details
                 const dismissalDetails = {
                     type: dismissalMethod,
@@ -304,10 +343,10 @@
                         dismissal: dismissalDetails
                     }
                 }));
-                
+
                 // Save partnership
                 setPartnerships(prev => [...prev, { ...currentPartnership, wicket: newWickets }]);
-                
+
                 // Save fall of wicket with dismissal details
                 setFallOfWickets(prev => [...prev, {
                     wicket: newWickets,
@@ -317,17 +356,17 @@
                     overs: overs + (balls / 6),
                     dismissal: dismissalDetails
                 }]);
-                
+
                 // Update bowler stats (only if bowler gets credit)
                 if (!noBowlerCredit) {
                     updateBowlerStats(bowler, 0, true, true);
                 }
-                
+
                 // Check for over complete
                 if (newBalls === 6) {
                     newOvers += 1;
                     newBalls = 0;
-                    
+
                     const overRunsThisOver = ballHistory.slice(-5).reduce((sum, b) => {
                         if (b.extra === 'wide' || b.extra === 'noball') {
                             return sum + (b.extraRuns + 1);
@@ -335,11 +374,11 @@
                         return sum + b.runs;
                     }, 0);
                     setOverRuns(prev => [...prev, overRunsThisOver]);
-                    
+
                     [newStriker, newNonStriker] = [nonStriker, striker];
                     setCurrentOver([]);
                 }
-                
+
                 const newBallData = {
                     runs: 0,
                     wicket: true,
@@ -361,14 +400,14 @@
                 setWickets(newWickets);
                 setBallHistory([...ballHistory, newBallData]);
                 setCurrentOver([...currentOver, 'W']);
-                
+
                 // Check if retired batsmen available
                 if (retiredBatsmen.length > 0) {
                     setReturningFor('striker');
                     setShowReturnModal(true);
                 } else {
-                    const nextBatsman = currentPlayers.findIndex((p, i) => 
-                        i !== striker && i !== nonStriker && p.trim() !== '' && 
+                    const nextBatsman = currentPlayers.findIndex((p, i) =>
+                        i !== striker && i !== nonStriker && p.trim() !== '' &&
                         !ballHistory.some(b => b.wicket && b.outPlayer === i) &&
                         !retiredBatsmen.includes(i)
                     );
@@ -436,7 +475,7 @@
                     totalRuns = runsScored;
                     newRuns += totalRuns;
                     newBalls += 1;
-                    
+
                     ballText = runsScored === 0 ? '•' : runsScored.toString();
                     updateBatsmanStats(striker, runsScored, true);
                     setCurrentPartnership(prev => ({
@@ -444,7 +483,7 @@
                         runs: prev.runs + runsScored,
                         balls: prev.balls + 1
                     }));
-                    
+
                     if (runsScored % 2 !== 0) {
                         [newStriker, newNonStriker] = [nonStriker, striker];
                     }
@@ -455,7 +494,7 @@
                 if (isBall && newBalls === 6) {
                     newOvers += 1;
                     newBalls = 0;
-                    
+
                     const overRunsThisOver = ballHistory.slice(-5).reduce((sum, b) => {
                         if (b.extra === 'wide' || b.extra === 'noball') {
                             return sum + (b.extraRuns + 1);
@@ -463,7 +502,7 @@
                         return sum + b.runs;
                     }, 0) + totalRuns;
                     setOverRuns(prev => [...prev, overRunsThisOver]);
-                    
+
                     [newStriker, newNonStriker] = [nonStriker, striker];
                     setCurrentOver([]);
                 }
@@ -503,7 +542,7 @@
 
                 const lastBall = ballHistory[ballHistory.length - 1];
                 setRuns(prev => prev - lastBall.totalRuns);
-                
+
                 if (lastBall.extra !== 'wide' && lastBall.extra !== 'noball') {
                     if (balls === 0) {
                         setOvers(prev => prev - 1);
@@ -512,13 +551,13 @@
                         setBalls(prev => prev - 1);
                     }
                 }
-                
+
                 if (lastBall.wicket) {
                     setWickets(prev => prev - 1);
                     setFallOfWickets(prev => prev.slice(0, -1));
                     setPartnerships(prev => prev.slice(0, -1));
                 }
-                
+
                 setBallHistory(prev => prev.slice(0, -1));
                 setCurrentOver(prev => prev.slice(0, -1));
             };
@@ -541,7 +580,7 @@
                 if (innings === 1) {
                     setInnings1Data(inningsData);
                     setTarget(finalRuns + 1);
-                    
+
                     setInnings(2);
                     setBattingTeam(battingTeam === 'team1' ? 'team2' : 'team1');
                     setRuns(0);
@@ -573,7 +612,7 @@
 
             const getMatchResult = () => {
                 if (!innings1Data || !innings2Data) return '';
-                
+
                 if (innings2Data.runs > innings1Data.runs) {
                     return `${battingTeam === 'team2' ? team2Name : team1Name} won by ${10 - innings2Data.wickets} wickets`;
                 } else if (innings2Data.runs < innings1Data.runs) {
@@ -585,10 +624,10 @@
 
             const getDismissalText = (dismissal) => {
                 if (!dismissal) return 'not out';
-                
+
                 const dismissalType = dismissalTypes.find(d => d.id === dismissal.type);
                 let text = dismissalType?.name || dismissal.type;
-                
+
                 if (dismissal.type === 'caught' && dismissal.fielderName && dismissal.bowlerName) {
                     text = `c ${dismissal.fielderName} b ${dismissal.bowlerName}`;
                 } else if (dismissal.type === 'stumped' && dismissal.fielderName && dismissal.bowlerName) {
@@ -602,13 +641,275 @@
                 } else if (dismissal.type === 'hitwicket' && dismissal.bowlerName) {
                     text = `hit wicket b ${dismissal.bowlerName}`;
                 }
-                
+
                 return text;
             };
 
             const downloadScorecard = () => {
                 window.print();
             };
+
+            // Save/Load Functions
+            const saveMatch = (matchName) => {
+                const matchData = {
+                    id: Date.now(),
+                    name: matchName || `Match ${new Date().toLocaleString()}`,
+                    savedAt: new Date().toISOString(),
+
+                    // Setup data
+                    team1Name, team2Name, team1Players, team2Players,
+                    matchFormat, totalOvers,
+
+                    // Match state
+                    battingTeam, innings, runs, wickets, overs, balls,
+                    striker, nonStriker, bowler,
+                    ballHistory, currentOver, matchComplete, target,
+                    retiredBatsmen,
+
+                    // Statistics
+                    batsmanStats, bowlerStats,
+                    partnerships, fallOfWickets, overRuns,
+                    currentPartnership, extras,
+
+                    // Innings data
+                    innings1Data, innings2Data
+                };
+
+                try {
+                    const matches = JSON.parse(localStorage.getItem('cricketMatches') || '[]');
+                    matches.push(matchData);
+                    localStorage.setItem('cricketMatches', JSON.stringify(matches));
+                    alert(`✅ Match saved: ${matchName}`);
+                } catch (error) {
+                    alert('❌ Error saving match: ' + error.message);
+                }
+            };
+
+            const loadMatch = (matchId) => {
+                try {
+                    const matches = JSON.parse(localStorage.getItem('cricketMatches') || '[]');
+                    const match = matches.find(m => m.id === matchId);
+
+                    if (!match) {
+                        alert('❌ Match not found');
+                        return;
+                    }
+
+                    // Restore setup data
+                    setTeam1Name(match.team1Name);
+                    setTeam2Name(match.team2Name);
+                    setTeam1Players(match.team1Players);
+                    setTeam2Players(match.team2Players);
+                    setMatchFormat(match.matchFormat);
+                    setTotalOvers(match.totalOvers);
+
+                    // Restore match state
+                    setBattingTeam(match.battingTeam);
+                    setInnings(match.innings);
+                    setRuns(match.runs);
+                    setWickets(match.wickets);
+                    setOvers(match.overs);
+                    setBalls(match.balls);
+                    setStriker(match.striker);
+                    setNonStriker(match.nonStriker);
+                    setBowler(match.bowler);
+                    setBallHistory(match.ballHistory);
+                    setCurrentOver(match.currentOver);
+                    setMatchComplete(match.matchComplete);
+                    setTarget(match.target);
+                    setRetiredBatsmen(match.retiredBatsmen || []);
+
+                    // Restore statistics
+                    setBatsmanStats(match.batsmanStats);
+                    setBowlerStats(match.bowlerStats);
+                    setPartnerships(match.partnerships);
+                    setFallOfWickets(match.fallOfWickets);
+                    setOverRuns(match.overRuns);
+                    setCurrentPartnership(match.currentPartnership);
+                    setExtras(match.extras);
+
+                    // Restore innings data
+                    setInnings1Data(match.innings1Data);
+                    setInnings2Data(match.innings2Data);
+
+                    // Mark setup as complete
+                    setSetupComplete(true);
+
+                    alert(`✅ Match loaded: ${match.name}`);
+                } catch (error) {
+                    alert('❌ Error loading match: ' + error.message);
+                }
+            };
+
+            const getSavedMatches = () => {
+                try {
+                    return JSON.parse(localStorage.getItem('cricketMatches') || '[]');
+                } catch (error) {
+                    console.error('Error getting saved matches:', error);
+                    return [];
+                }
+            };
+
+            const deleteMatch = (matchId) => {
+                try {
+                    const matches = getSavedMatches();
+                    const filtered = matches.filter(m => m.id !== matchId);
+                    localStorage.setItem('cricketMatches', JSON.stringify(filtered));
+                    // Force re-render of match history
+                    setShowMatchHistory(false);
+                    setTimeout(() => setShowMatchHistory(true), 10);
+                } catch (error) {
+                    alert('❌ Error deleting match: ' + error.message);
+                }
+            };
+
+            // Firebase Cloud Save/Load Functions
+            const saveMatchToCloud = async (matchName) => {
+                if (!firebaseInitialized) {
+                    alert('❌ Firebase not configured. Please configure Firebase in the code (see firebase-config.js)');
+                    return;
+                }
+
+                const matchData = {
+                    id: Date.now().toString(),
+                    name: matchName || `Match ${new Date().toLocaleString()}`,
+                    savedAt: new Date().toISOString(),
+
+                    // Setup data
+                    team1Name, team2Name, team1Players, team2Players,
+                    matchFormat, totalOvers,
+
+                    // Match state
+                    battingTeam, innings, runs, wickets, overs, balls,
+                    striker, nonStriker, bowler,
+                    ballHistory, currentOver, matchComplete, target,
+                    retiredBatsmen,
+
+                    // Statistics
+                    batsmanStats, bowlerStats,
+                    partnerships, fallOfWickets, overRuns,
+                    currentPartnership, extras,
+
+                    // Innings data
+                    innings1Data, innings2Data
+                };
+
+                try {
+                    await db.collection('cricketMatches').doc(matchData.id).set(matchData);
+                    alert(`✅ Match saved to cloud: ${matchName}`);
+                    await fetchCloudMatches(); // Refresh cloud matches list
+                } catch (error) {
+                    console.error('Firebase save error:', error);
+                    alert('❌ Error saving to cloud: ' + error.message);
+                }
+            };
+
+            const loadMatchFromCloud = async (matchId) => {
+                if (!firebaseInitialized) {
+                    alert('❌ Firebase not configured');
+                    return;
+                }
+
+                try {
+                    const doc = await db.collection('cricketMatches').doc(matchId).get();
+
+                    if (!doc.exists) {
+                        alert('❌ Match not found in cloud');
+                        return;
+                    }
+
+                    const match = doc.data();
+
+                    // Restore setup data
+                    setTeam1Name(match.team1Name);
+                    setTeam2Name(match.team2Name);
+                    setTeam1Players(match.team1Players);
+                    setTeam2Players(match.team2Players);
+                    setMatchFormat(match.matchFormat);
+                    setTotalOvers(match.totalOvers);
+
+                    // Restore match state
+                    setBattingTeam(match.battingTeam);
+                    setInnings(match.innings);
+                    setRuns(match.runs);
+                    setWickets(match.wickets);
+                    setOvers(match.overs);
+                    setBalls(match.balls);
+                    setStriker(match.striker);
+                    setNonStriker(match.nonStriker);
+                    setBowler(match.bowler);
+                    setBallHistory(match.ballHistory);
+                    setCurrentOver(match.currentOver);
+                    setMatchComplete(match.matchComplete);
+                    setTarget(match.target);
+                    setRetiredBatsmen(match.retiredBatsmen || []);
+
+                    // Restore statistics
+                    setBatsmanStats(match.batsmanStats);
+                    setBowlerStats(match.bowlerStats);
+                    setPartnerships(match.partnerships);
+                    setFallOfWickets(match.fallOfWickets);
+                    setOverRuns(match.overRuns);
+                    setCurrentPartnership(match.currentPartnership);
+                    setExtras(match.extras);
+
+                    // Restore innings data
+                    setInnings1Data(match.innings1Data);
+                    setInnings2Data(match.innings2Data);
+
+                    // Mark setup as complete
+                    setSetupComplete(true);
+
+                    alert(`✅ Match loaded from cloud: ${match.name}`);
+                } catch (error) {
+                    console.error('Firebase load error:', error);
+                    alert('❌ Error loading from cloud: ' + error.message);
+                }
+            };
+
+            const fetchCloudMatches = async () => {
+                if (!firebaseInitialized) {
+                    return;
+                }
+
+                try {
+                    const snapshot = await db.collection('cricketMatches')
+                        .orderBy('savedAt', 'desc')
+                        .get();
+
+                    const matches = [];
+                    snapshot.forEach(doc => {
+                        matches.push({ id: doc.id, ...doc.data() });
+                    });
+
+                    setCloudMatches(matches);
+                } catch (error) {
+                    console.error('Error fetching cloud matches:', error);
+                }
+            };
+
+            const deleteMatchFromCloud = async (matchId) => {
+                if (!firebaseInitialized) {
+                    alert('❌ Firebase not configured');
+                    return;
+                }
+
+                try {
+                    await db.collection('cricketMatches').doc(matchId).delete();
+                    alert('✅ Match deleted from cloud');
+                    await fetchCloudMatches(); // Refresh list
+                } catch (error) {
+                    console.error('Firebase delete error:', error);
+                    alert('❌ Error deleting from cloud: ' + error.message);
+                }
+            };
+
+            // Load cloud matches on component mount
+            useEffect(() => {
+                if (firebaseInitialized && storageMode === 'cloud') {
+                    fetchCloudMatches();
+                }
+            }, [storageMode]);
 
             // SETUP SCREEN - Same as before, keeping it concise
             if (!setupComplete) {
@@ -620,7 +921,7 @@
                                 <h1 className="text-4xl font-bold text-gray-800">Cricket Scorer Pro</h1>
                                 <p className="text-gray-600 mt-2">Advanced Live Scoring System</p>
                             </div>
-                            
+
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-lg font-bold text-gray-800 mb-4 text-center">Select Match Format</label>
@@ -727,7 +1028,7 @@
                                             alert('Please select or enter valid number of overs (minimum 1)');
                                             return;
                                         }
-                                        if (team1Name && team2Name && 
+                                        if (team1Name && team2Name &&
                                             team1Players.filter(p => p.trim()).length >= 2 &&
                                             team2Players.filter(p => p.trim()).length >= 2) {
                                             setSetupComplete(true);
@@ -751,10 +1052,10 @@
                     <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <h2 className="text-2xl font-bold mb-4 text-gray-800">Select Dismissal Type</h2>
                         <p className="text-gray-600 mb-6">
-                            Batsman: <span className="font-bold">{currentPlayers[striker]}</span> - 
+                            Batsman: <span className="font-bold">{currentPlayers[striker]}</span> -
                             Bowler: <span className="font-bold">{bowlingPlayers[bowler]}</span>
                         </p>
-                        
+
                         <div className="grid grid-cols-2 gap-3 mb-6">
                             {dismissalTypes.map(type => (
                                 <button
@@ -781,14 +1082,14 @@
                                     Select Fielder {dismissalType === 'stumped' ? '(Wicket Keeper)' : ''}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {bowlingPlayers.map((player, index) => 
+                                    {bowlingPlayers.map((player, index) =>
                                         player.trim() && (
                                             <button
                                                 key={index}
                                                 onClick={() => setSelectedFielder(index)}
                                                 className={`px-4 py-2 rounded-lg border-2 transition-all ${
-                                                    selectedFielder === index 
-                                                        ? 'bg-blue-500 text-white border-blue-600' 
+                                                    selectedFielder === index
+                                                        ? 'bg-blue-500 text-white border-blue-600'
                                                         : 'bg-white border-gray-300 hover:border-blue-400'
                                                 }`}
                                             >
@@ -836,19 +1137,19 @@
                             ))}
                             <button
                                 onClick={() => {
-                                    const nextBatsman = currentPlayers.findIndex((p, i) => 
-                                        i !== striker && i !== nonStriker && p.trim() !== '' && 
+                                    const nextBatsman = currentPlayers.findIndex((p, i) =>
+                                        i !== striker && i !== nonStriker && p.trim() !== '' &&
                                         !ballHistory.some(b => b.wicket && b.outPlayer === i) &&
                                         !retiredBatsmen.includes(i) &&
                                         !(batsmanStats[i]?.status === 'retired not out')
                                     );
-                                    
+
                                     if (returningFor === 'striker') {
                                         setStriker(nextBatsman);
                                     } else {
                                         setNonStriker(nextBatsman);
                                     }
-                                    
+
                                     setShowReturnModal(false);
                                     setReturningFor(null);
                                 }}
@@ -866,7 +1167,7 @@
                 <div className="min-h-screen p-4 pb-20">
                     {showDismissalModal && <DismissalModal />}
                     {showReturnModal && <ReturnRetiredModal />}
-                    
+
                     <div className="max-w-7xl mx-auto">
                         <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-2xl shadow-xl p-6 mb-6">
                             <h1 className="text-3xl font-bold text-center mb-2">{team1Name} vs {team2Name}</h1>
@@ -973,7 +1274,7 @@
                                         <div className="mb-4">
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">Current Bowler</label>
                                             <select value={bowler} onChange={(e) => setBowler(parseInt(e.target.value))} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none font-semibold" disabled={matchComplete}>
-                                                {bowlingPlayers.map((player, index) => 
+                                                {bowlingPlayers.map((player, index) =>
                                                     player.trim() && (
                                                         <option key={index} value={index}>
                                                             {player} {bowlerStats[index] && `(${bowlerStats[index].overs}.${bowlerStats[index].balls}-${bowlerStats[index].runs}-${bowlerStats[index].wickets})`}
@@ -2204,6 +2505,181 @@
                                 <button onClick={downloadScorecard} className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all">
                                     📄 Download Scorecard
                                 </button>
+                            </div>
+                        )}
+
+                        {/* Save/Load Floating Buttons */}
+                        <div className="fixed bottom-6 right-6 flex flex-col gap-3 no-print z-40">
+                            {/* Storage Mode Toggle */}
+                            <div className="bg-white rounded-xl shadow-lg p-3 border-2 border-gray-200">
+                                <div className="text-xs font-semibold text-gray-600 mb-2 text-center">Storage Mode</div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setStorageMode('local')}
+                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                                            storageMode === 'local'
+                                                ? 'bg-blue-600 text-white shadow-md'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                        title="Save to browser localStorage">
+                                        💻 Local
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (!firebaseInitialized) {
+                                                alert('⚠️ Firebase not configured. Please set up Firebase (see firebase-config.js)');
+                                                return;
+                                            }
+                                            setStorageMode('cloud');
+                                            fetchCloudMatches();
+                                        }}
+                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                                            storageMode === 'cloud'
+                                                ? 'bg-purple-600 text-white shadow-md'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                        title="Save to Firebase cloud">
+                                        ☁️ Cloud
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    const name = prompt('Enter match name:', `${team1Name} vs ${team2Name} - ${new Date().toLocaleDateString()}`);
+                                    if (name) {
+                                        if (storageMode === 'cloud') {
+                                            saveMatchToCloud(name);
+                                        } else {
+                                            saveMatch(name);
+                                        }
+                                    }
+                                }}
+                                className={`${
+                                    storageMode === 'cloud'
+                                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800'
+                                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                                } text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:scale-105`}
+                                title={`Save to ${storageMode === 'cloud' ? 'Firebase cloud' : 'browser localStorage'}`}>
+                                💾 Save {storageMode === 'cloud' ? '☁️' : '💻'}
+                            </button>
+
+                            <button
+                                onClick={() => setShowMatchHistory(true)}
+                                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+                                title="Load saved match">
+                                📂 Load
+                            </button>
+                        </div>
+
+                        {/* Match History Modal */}
+                        {showMatchHistory && (
+                            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
+                                    <div className={`bg-gradient-to-r ${storageMode === 'cloud' ? 'from-purple-600 to-indigo-600' : 'from-green-600 to-blue-600'} text-white p-6`}>
+                                        <h2 className="text-3xl font-bold">📂 Saved Matches</h2>
+                                        <p className="text-sm opacity-90 mt-1">
+                                            {storageMode === 'cloud' ? '☁️ Loading from Firebase Cloud' : '💻 Loading from Local Storage'}
+                                        </p>
+                                    </div>
+
+                                    <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+                                        {(() => {
+                                            const matches = storageMode === 'cloud' ? cloudMatches : getSavedMatches();
+
+                                            if (matches.length === 0) {
+                                                return (
+                                                    <div className="text-center py-12">
+                                                        <div className="text-6xl mb-4">🏏</div>
+                                                        <p className="text-gray-500 text-lg">No saved matches yet</p>
+                                                        <p className="text-gray-400 text-sm mt-2">
+                                                            {storageMode === 'cloud'
+                                                                ? 'Save your current match to Firebase cloud using the Save button'
+                                                                : 'Save your current match using the Save button'
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="space-y-3">
+                                                    {matches.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt)).map(match => (
+                                                        <div key={match.id} className={`bg-gradient-to-r ${
+                                                            storageMode === 'cloud'
+                                                                ? 'from-purple-50 to-indigo-50 border-purple-200'
+                                                                : 'from-gray-50 to-blue-50 border-gray-200'
+                                                        } border-2 rounded-xl p-5 hover:border-green-400 transition-all`}>
+                                                            <div className="flex items-start justify-between gap-4">
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <h3 className="font-bold text-lg text-gray-800">{match.name}</h3>
+                                                                        {storageMode === 'cloud' && (
+                                                                            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-semibold">☁️ Cloud</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="space-y-1 text-sm">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span>🏏 {match.team1Name} vs {match.team2Name}</span>
+                                                                        </div>
+                                                                        <div className="text-gray-600">
+                                                                            📊 {match.matchFormat} • Innings {match.innings}
+                                                                            {match.matchComplete && <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs font-semibold ml-2">✓ Complete</span>}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500">
+                                                                            💾 Saved: {new Date(match.savedAt).toLocaleString()}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex flex-col gap-2">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (confirm(`Load match: ${match.name}?`)) {
+                                                                                if (storageMode === 'cloud') {
+                                                                                    loadMatchFromCloud(match.id);
+                                                                                } else {
+                                                                                    loadMatch(match.id);
+                                                                                }
+                                                                                setShowMatchHistory(false);
+                                                                            }
+                                                                        }}
+                                                                        className="bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-2 rounded-lg shadow transition-all text-sm">
+                                                                        ▶️ Load
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (confirm(`Delete: ${match.name}?`)) {
+                                                                                if (storageMode === 'cloud') {
+                                                                                    deleteMatchFromCloud(match.id);
+                                                                                } else {
+                                                                                    deleteMatch(match.id);
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                        className="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2 rounded-lg shadow transition-all text-sm">
+                                                                        🗑️ Delete
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                ))}
+                                            </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    <div className="p-6 bg-gray-50 border-t border-gray-200 flex gap-3">
+                                        <button
+                                            onClick={() => setShowMatchHistory(false)}
+                                            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-xl shadow transition-all">
+                                            ✖️ Close
+                                        </button>
+                                        <div className="text-sm text-gray-600 flex items-center px-4">
+                                            {getSavedMatches().length} match{getSavedMatches().length !== 1 ? 'es' : ''}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

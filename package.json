@@ -1,7 +1,7 @@
 {
   "name": "cricket-scorer-pro",
-  "version": "1.0.0",
-  "description": "Professional cricket scoring application with live scoring and detailed statistics",
+  "version": "2.2.0",
+  "description": "Professional cricket scoring application with live scoring, advanced analytics, and Firebase cloud storage",
   "main": "public/index.html",
   "scripts": {
     "dev": "live-server public --port=3000 --open",
@@ -34,12 +34,15 @@
   },
   "homepage": "https://github.com/yourusername/cricket-scorer-pro#readme",
   "devDependencies": {
+    "eslint": "^8.50.0",
     "live-server": "^1.2.2",
-    "prettier": "^3.0.0",
-    "eslint": "^8.50.0"
+    "prettier": "^3.0.0"
   },
   "engines": {
     "node": ">=14.0.0",
     "npm": ">=6.0.0"
+  },
+  "dependencies": {
+    "firebase": "^12.5.0"
   }
 }
