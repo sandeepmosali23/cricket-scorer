@@ -1,0 +1,217 @@
+/* Cricket Scorer Pro - Main Styles */
+
+/* Base Styles */
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Custom Classes */
+.tab-active {
+    border-bottom: 3px solid #16a34a;
+    color: #16a34a;
+}
+
+.format-selected {
+    border: 3px solid #16a34a;
+    background: #f0fdf4;
+}
+
+.dismissal-selected {
+    border: 2px solid #16a34a;
+    background: #f0fdf4;
+}
+
+/* Print Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    body {
+        background: white;
+    }
+    
+    .bg-gradient-to-br {
+        background: white !important;
+    }
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #16a34a;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #15803d;
+}
+
+/* Button Hover Effects */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+    .scoring-button {
+        min-height: 60px;
+        font-size: 1.25rem;
+    }
+    
+    .tab-button {
+        min-width: 100px;
+    }
+}
+
+/* Loading State */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #16a34a;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Modal Backdrop */
+.modal-backdrop {
+    backdrop-filter: blur(4px);
+}
+
+/* Ball Visualization */
+.ball-dot {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ball-dot:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Score Display */
+.score-display {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Shadows */
+.card {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 
+                0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Gradient Text */
+.gradient-text {
+    background: linear-gradient(135deg, #16a34a 0%, #2563eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Focus States */
+input:focus,
+select:focus,
+button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+/* Disabled State */
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Success/Error States */
+.success {
+    background-color: #dcfce7;
+    border: 1px solid #16a34a;
+    color: #15803d;
+}
+
+.error {
+    background-color: #fee2e2;
+    border: 1px solid #ef4444;
+    color: #dc2626;
+}
+
+/* Table Styles */
+table {
+    border-collapse: collapse;
+}
+
+table thead {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+}
+
+/* Manhattan Chart */
+.manhattan-bar {
+    transition: all 0.3s ease;
+}
+
+.manhattan-bar:hover {
+    opacity: 0.8;
+}
+
+/* Responsive Typography */
+@media (max-width: 640px) {
+    .text-5xl {
+        font-size: 2.5rem;
+    }
+    
+    .text-4xl {
+        font-size: 2rem;
+    }
+    
+    .text-3xl {
+        font-size: 1.5rem;
+    }
+}
+
+/* Dark Mode Support (optional) */
+@media (prefers-color-scheme: dark) {
+    /* Can add dark mode styles here if needed */
+}

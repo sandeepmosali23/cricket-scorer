@@ -1,0 +1,45 @@
+{
+  "name": "cricket-scorer-pro",
+  "version": "1.0.0",
+  "description": "Professional cricket scoring application with live scoring and detailed statistics",
+  "main": "public/index.html",
+  "scripts": {
+    "dev": "live-server public --port=3000 --open",
+    "start": "npm run dev",
+    "serve": "python -m http.server 3000",
+    "serve:php": "php -S localhost:3000 -t public",
+    "format": "prettier --write \"**/*.{js,jsx,json,css,html}\"",
+    "lint": "eslint src --ext .js,.jsx",
+    "build": "npm run build:production",
+    "build:production": "node scripts/build.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "cricket",
+    "scorer",
+    "sports",
+    "scoring",
+    "react",
+    "live-scoring",
+    "statistics"
+  ],
+  "author": "Cricket Scorer Pro",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/cricket-scorer-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/cricket-scorer-pro/issues"
+  },
+  "homepage": "https://github.com/yourusername/cricket-scorer-pro#readme",
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "prettier": "^3.0.0",
+    "eslint": "^8.50.0"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}

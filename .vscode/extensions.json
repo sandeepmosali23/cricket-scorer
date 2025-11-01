@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    "anthropic.claude-dev",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "formulahendry.auto-rename-tag",
+    "bradlc.vscode-tailwindcss",
+    "ritwickdey.liveserver",
+    "ms-vscode.live-server",
+    "dsznajder.es7-react-js-snippets",
+    "christian-kohler.path-intellisense",
+    "wayou.vscode-todo-highlight",
+    "gruntfuggly.todo-tree",
+    "usernamehw.errorlens",
+    "naumovs.color-highlight",
+    "pranaygp.vscode-css-peek",
+    "zignd.html-css-class-completion",
+    "wix.vscode-import-cost"
+  ]
+}
