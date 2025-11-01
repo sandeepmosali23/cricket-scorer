@@ -4,7 +4,9 @@
       "Bash(npm start)",
       "Bash(npm install:*)",
       "Bash(npm run lint:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(chmod:*)",
+      "Bash(test:*)"
     ],
     "deny": [],
     "ask": []
