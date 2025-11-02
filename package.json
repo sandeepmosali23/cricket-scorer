@@ -1,7 +1,7 @@
 {
   "name": "cricket-scorer-pro",
-  "version": "2.7.0",
-  "description": "Professional cricket scoring application with live scoring, advanced analytics, Firebase cloud storage, match results viewer, dynamic player management, cricket over rules enforcement, enhanced home page with quick actions, and team library management system",
+  "version": "3.0.0",
+  "description": "Professional cricket scoring application with live scoring, advanced analytics, Firebase authentication and cloud storage, user accounts with personalization, match results viewer, dynamic player management, cricket over rules enforcement, enhanced home page, and team library management system",
   "main": "public/index.html",
   "scripts": {
     "dev": "live-server public --port=3000 --open",
