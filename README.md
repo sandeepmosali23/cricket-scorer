@@ -24,6 +24,7 @@ npm start
 - **[ANALYTICS_FEATURES.md](ANALYTICS_FEATURES.md)** - Advanced analytics & reports documentation
 - **[MULTI_INNINGS_UPDATE.md](MULTI_INNINGS_UPDATE.md)** - Multi-innings display implementation
 - **[SAVE_LOAD_USAGE.md](SAVE_LOAD_USAGE.md)** - User guide for saving/loading matches
+- **[MATCH_RESULTS_FEATURE.md](MATCH_RESULTS_FEATURE.md)** - ⭐ NEW! Match Results Viewer documentation
 
 ### Firebase Cloud Storage
 - **[FIREBASE_QUICK_START.md](FIREBASE_QUICK_START.md)** - ⚡ 5-minute Firebase setup
@@ -113,6 +114,11 @@ npm run lint        # Lint code with ESLint
 - Toggle between local and cloud modes
 - Export CSV and PDF reports
 - Load/delete saved matches
+- 📊 **Match Results Viewer**: Browse and view all saved matches
+  - Beautiful grid layout with match cards
+  - Detailed match view with top performers
+  - Quick load from results
+  - Works with both local and cloud storage
 
 ## 🎓 Learning Path
 
