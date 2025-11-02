@@ -161,6 +161,10 @@
             const [authError, setAuthError] = useState('');
             const [showUserMenu, setShowUserMenu] = useState(false);
 
+            // New batsman selection state
+            const [showSelectNewBatsman, setShowSelectNewBatsman] = useState(false);
+            const [outBatsmanPosition, setOutBatsmanPosition] = useState(null); // 'striker' or 'nonStriker'
+
             const currentTeamName = battingTeam === 'team1' ? team1Name : team2Name;
             const bowlingTeamName = battingTeam === 'team1' ? team2Name : team1Name;
             const currentPlayers = battingTeam === 'team1' ? team1Players : team2Players;
@@ -222,13 +226,16 @@
                 initializeBowlerStats(bowler);
             }, [striker, nonStriker, bowler]);
 
-            // Load saved teams from localStorage
+            // Load saved teams from localStorage (only for guest mode)
             useEffect(() => {
-                const loadedTeams = localStorage.getItem('cricketTeams');
-                if (loadedTeams) {
-                    setSavedTeams(JSON.parse(loadedTeams));
+                // Only load from localStorage if user is not logged in
+                if (!user && !authLoading) {
+                    const loadedTeams = localStorage.getItem('cricketTeams');
+                    if (loadedTeams) {
+                        setSavedTeams(JSON.parse(loadedTeams));
+                    }
                 }
-            }, []);
+            }, [user, authLoading]);
 
             // Authentication listener
             useEffect(() => {
@@ -564,27 +571,9 @@
                 setRetiredBatsmen(prev => [...prev, batsmanIndex]);
                 setPartnerships(prev => [...prev, { ...currentPartnership, retired: true }]);
 
-                const nextBatsman = currentPlayers.findIndex((p, i) =>
-                    i !== striker && i !== nonStriker && p.trim() !== '' &&
-                    !ballHistory.some(b => b.wicket && b.outPlayer === i) &&
-                    !retiredBatsmen.includes(i) &&
-                    !(batsmanStats[i]?.status === 'retired not out')
-                );
-
-                if (nextBatsman === -1) {
-                    alert('No more batsmen available!');
-                    return;
-                }
-
-                if (batsmanType === 'striker') {
-                    setStriker(nextBatsman);
-                } else {
-                    setNonStriker(nextBatsman);
-                }
-
-                const newStriker = batsmanType === 'striker' ? nextBatsman : striker;
-                const newNonStriker = batsmanType === 'striker' ? nonStriker : nextBatsman;
-                setCurrentPartnership({ runs: 0, balls: 0, batsman1: newStriker, batsman2: newNonStriker });
+                // Show new batsman selection modal
+                setOutBatsmanPosition(batsmanType);
+                setShowSelectNewBatsman(true);
             };
 
             const returnRetiredBatsman = (retiredIndex) => {
@@ -720,21 +709,11 @@
                 setBallHistory([...ballHistory, newBallData]);
                 setCurrentOver([...currentOver, 'W']);
 
-                // Check if retired batsmen available
-                if (retiredBatsmen.length > 0) {
-                    setReturningFor('striker');
-                    setShowReturnModal(true);
-                } else {
-                    const nextBatsman = currentPlayers.findIndex((p, i) =>
-                        i !== striker && i !== nonStriker && p.trim() !== '' &&
-                        !ballHistory.some(b => b.wicket && b.outPlayer === i) &&
-                        !retiredBatsmen.includes(i)
-                    );
-                    newStriker = nextBatsman;
-                    setStriker(newStriker);
-                    setNonStriker(newNonStriker);
-                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: newStriker, batsman2: newNonStriker });
-                }
+                // Show new batsman selection modal
+                setOutBatsmanPosition('striker');
+                setShowSelectNewBatsman(true);
+                setStriker(newStriker);
+                setNonStriker(newNonStriker);
 
                 // Check if innings complete
                 if (newWickets >= 10 || newOvers >= totalOvers) {
@@ -742,6 +721,18 @@
                 } else if (innings === 2 && target && newRuns >= target) {
                     endMatch(newRuns, newWickets, newOvers, newBalls);
                 }
+            };
+
+            const selectNewBatsman = (batsmanIndex) => {
+                if (outBatsmanPosition === 'striker') {
+                    setStriker(batsmanIndex);
+                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: batsmanIndex, batsman2: nonStriker });
+                } else if (outBatsmanPosition === 'nonStriker') {
+                    setNonStriker(batsmanIndex);
+                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: striker, batsman2: batsmanIndex });
+                }
+                setShowSelectNewBatsman(false);
+                setOutBatsmanPosition(null);
             };
 
             const addBall = (runsScored, isWicket = false, extra = null, extraRuns = 0) => {
@@ -2536,11 +2527,119 @@
                 </div>
             );
 
+            // SELECT NEW BATSMAN MODAL
+            const SelectNewBatsmanModal = () => {
+                const availableBatsmen = currentPlayers
+                    .map((player, index) => ({ player, index }))
+                    .filter(({ player, index }) =>
+                        player.trim() !== '' &&
+                        index !== striker &&
+                        index !== nonStriker &&
+                        !ballHistory.some(b => b.wicket && b.outPlayer === index) &&
+                        !(batsmanStats[index]?.status === 'out') &&
+                        !retiredBatsmen.includes(index) &&
+                        !(batsmanStats[index]?.status === 'retired not out')
+                    );
+
+                // Include retired batsmen as an option
+                const retiredOptions = retiredBatsmen.map(index => ({
+                    player: currentPlayers[index],
+                    index: index,
+                    isRetired: true
+                }));
+
+                const allOptions = [...availableBatsmen, ...retiredOptions];
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                            <h2 className="text-2xl font-bold mb-3 text-gray-800">
+                                Select New {outBatsmanPosition === 'striker' ? 'Striker' : 'Non-Striker'}
+                            </h2>
+                            <p className="text-gray-600 mb-6">
+                                Choose the next batsman to come in
+                            </p>
+
+                            {allOptions.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <p className="text-gray-600 text-lg mb-4">No batsmen available!</p>
+                                    <p className="text-sm text-gray-500">All players have batted or are currently batting.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                    {allOptions.map(({ player, index, isRetired }) => {
+                                        const stats = batsmanStats[index];
+                                        const runs = stats?.runs || 0;
+                                        const balls = stats?.balls || 0;
+                                        const strikeRate = balls > 0 ? ((runs / balls) * 100).toFixed(1) : '0.0';
+
+                                        return (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    if (isRetired) {
+                                                        // Return retired batsman
+                                                        setRetiredBatsmen(prev => prev.filter(i => i !== index));
+                                                        setBatsmanStats(prev => ({
+                                                            ...prev,
+                                                            [index]: {
+                                                                ...prev[index],
+                                                                status: 'batting'
+                                                            }
+                                                        }));
+                                                    }
+                                                    selectNewBatsman(index);
+                                                }}
+                                                className={`p-4 rounded-xl border-2 transition-all text-left hover:border-green-500 hover:shadow-lg ${
+                                                    isRetired ? 'bg-orange-50 border-orange-300' : 'border-gray-300'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="font-bold text-lg">{player}</div>
+                                                    {isRetired && (
+                                                        <span className="text-xs bg-orange-500 text-white px-2 py-1 rounded-full">
+                                                            Retired
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {(runs > 0 || balls > 0) && (
+                                                    <div className="text-sm text-gray-600">
+                                                        Previous: {runs} ({balls}) • SR: {strikeRate}
+                                                    </div>
+                                                )}
+                                                {runs === 0 && balls === 0 && !isRetired && (
+                                                    <div className="text-sm text-green-600 font-semibold">
+                                                        Yet to bat
+                                                    </div>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            <div className="border-t pt-4">
+                                <button
+                                    onClick={() => {
+                                        setShowSelectNewBatsman(false);
+                                        setOutBatsmanPosition(null);
+                                    }}
+                                    className="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
             // MAIN SCORING INTERFACE - Continuing from header
             return (
                 <div className="min-h-screen p-4 pb-20">
                     {showDismissalModal && <DismissalModal />}
                     {showReturnModal && <ReturnRetiredModal />}
+                    {showSelectNewBatsman && <SelectNewBatsmanModal />}
 
                     {/* Over Complete Notification */}
                     {showOverComplete && (
