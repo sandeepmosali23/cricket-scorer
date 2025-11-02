@@ -249,8 +249,13 @@
                     setAuthLoading(false);
                     if (user) {
                         console.log('✅ User logged in:', user.email);
-                        // Load user-specific teams from Firestore
+                        // Load user-specific data from Firestore
                         loadUserTeams(user.uid);
+                        fetchCloudMatches();
+                    } else {
+                        // Clear user data when logged out
+                        setSavedTeams([]);
+                        setCloudMatches([]);
                     }
                 });
 
@@ -1113,6 +1118,11 @@
                     name: matchName || `Match ${new Date().toLocaleString()}`,
                     savedAt: new Date().toISOString(),
 
+                    // User data (if logged in)
+                    userId: user ? user.uid : null,
+                    scorerName: user ? user.displayName || user.email : 'Guest',
+                    scorerEmail: user ? user.email : null,
+
                     // Setup data
                     team1Name, team2Name, team1Players, team2Players,
                     matchFormat, totalOvers,
@@ -1211,7 +1221,14 @@
                 }
 
                 try {
-                    const snapshot = await db.collection('cricketMatches')
+                    let query = db.collection('cricketMatches');
+
+                    // If user is logged in, only fetch their matches
+                    if (user) {
+                        query = query.where('userId', '==', user.uid);
+                    }
+
+                    const snapshot = await query
                         .orderBy('savedAt', 'desc')
                         .get();
 
@@ -1221,6 +1238,7 @@
                     });
 
                     setCloudMatches(matches);
+                    console.log(`✅ Loaded ${matches.length} matches${user ? ' for user' : ''}`);
                 } catch (error) {
                     console.error('Error fetching cloud matches:', error);
                 }
