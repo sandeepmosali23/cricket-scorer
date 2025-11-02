@@ -165,10 +165,22 @@
             const [showSelectNewBatsman, setShowSelectNewBatsman] = useState(false);
             const [outBatsmanPosition, setOutBatsmanPosition] = useState(null); // 'striker' or 'nonStriker'
 
+            // Player stats viewer state
+            const [showPlayerStats, setShowPlayerStats] = useState(false);
+            const [allPlayerStats, setAllPlayerStats] = useState([]);
+            const [selectedPlayer, setSelectedPlayer] = useState(null);
+            const [statsFilter, setStatsFilter] = useState('all'); // 'all', 'batting', 'bowling'
+
             const currentTeamName = battingTeam === 'team1' ? team1Name : team2Name;
             const bowlingTeamName = battingTeam === 'team1' ? team2Name : team1Name;
             const currentPlayers = battingTeam === 'team1' ? team1Players : team2Players;
             const bowlingPlayers = battingTeam === 'team1' ? team2Players : team1Players;
+
+            // Calculate max wickets based on actual player count
+            // A team is "all out" when wickets = (total players - 1)
+            // E.g., 11 players → all out at 10 wickets, 7 players → all out at 6 wickets
+            const totalBattingPlayers = currentPlayers.filter(p => p.trim() !== '').length;
+            const maxWickets = totalBattingPlayers > 0 ? totalBattingPlayers - 1 : 10;
 
             // Dismissal types
             const dismissalTypes = [
@@ -515,6 +527,146 @@
                 alert(`✅ ${team.name} loaded to Team ${teamNumber}!`);
             };
 
+            // Player Statistics Functions
+            const updatePlayerStatsInFirestore = async (matchData) => {
+                if (!user || !db) return; // Only for logged-in users
+
+                try {
+                    // Extract all players who batted or bowled
+                    const playersToUpdate = new Set();
+
+                    // Get batting stats
+                    Object.keys(matchData.batsmanStats || {}).forEach(index => {
+                        const playerName = matchData.team1Players[index] || matchData.team2Players[index];
+                        if (playerName) playersToUpdate.add(playerName);
+                    });
+
+                    // Get bowling stats
+                    Object.keys(matchData.bowlerStats || {}).forEach(index => {
+                        const playerName = matchData.team1Players[index] || matchData.team2Players[index];
+                        if (playerName) playersToUpdate.add(playerName);
+                    });
+
+                    // Update each player's cumulative stats
+                    for (const playerName of playersToUpdate) {
+                        const playerRef = db.collection('playerStats').doc(`${user.uid}_${playerName}`);
+                        const playerDoc = await playerRef.get();
+
+                        // Find player's batting stats
+                        let battingStats = null;
+                        [...(matchData.team1Players || []), ...(matchData.team2Players || [])].forEach((name, idx) => {
+                            if (name === playerName && matchData.batsmanStats?.[idx]) {
+                                battingStats = matchData.batsmanStats[idx];
+                            }
+                        });
+
+                        // Find player's bowling stats
+                        let bowlingStats = null;
+                        [...(matchData.team1Players || []), ...(matchData.team2Players || [])].forEach((name, idx) => {
+                            if (name === playerName && matchData.bowlerStats?.[idx]) {
+                                bowlingStats = matchData.bowlerStats[idx];
+                            }
+                        });
+
+                        if (playerDoc.exists) {
+                            // Update existing stats
+                            const current = playerDoc.data();
+                            const updated = {
+                                playerName,
+                                userId: user.uid,
+                                updatedAt: new Date().toISOString(),
+
+                                // Batting stats
+                                totalMatches: (current.totalMatches || 0) + 1,
+                                totalInnings: (current.totalInnings || 0) + (battingStats ? 1 : 0),
+                                totalRuns: (current.totalRuns || 0) + (battingStats?.runs || 0),
+                                totalBalls: (current.totalBalls || 0) + (battingStats?.balls || 0),
+                                highScore: Math.max(current.highScore || 0, battingStats?.runs || 0),
+                                notOuts: (current.notOuts || 0) + (battingStats && battingStats.status !== 'out' ? 1 : 0),
+                                fours: (current.fours || 0) + (battingStats?.fours || 0),
+                                sixes: (current.sixes || 0) + (battingStats?.sixes || 0),
+
+                                // Bowling stats
+                                ballsBowled: (current.ballsBowled || 0) + ((bowlingStats?.overs || 0) * 6 + (bowlingStats?.balls || 0)),
+                                runsConceded: (current.runsConceded || 0) + (bowlingStats?.runs || 0),
+                                wickets: (current.wickets || 0) + (bowlingStats?.wickets || 0),
+                                bestBowling: current.bestBowling || '0/0'
+                            };
+                            await playerRef.update(updated);
+                        } else {
+                            // Create new stats
+                            await playerRef.set({
+                                playerName,
+                                userId: user.uid,
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString(),
+
+                                // Batting stats
+                                totalMatches: 1,
+                                totalInnings: battingStats ? 1 : 0,
+                                totalRuns: battingStats?.runs || 0,
+                                totalBalls: battingStats?.balls || 0,
+                                highScore: battingStats?.runs || 0,
+                                notOuts: battingStats && battingStats.status !== 'out' ? 1 : 0,
+                                fours: battingStats?.fours || 0,
+                                sixes: battingStats?.sixes || 0,
+
+                                // Bowling stats
+                                ballsBowled: (bowlingStats?.overs || 0) * 6 + (bowlingStats?.balls || 0),
+                                runsConceded: bowlingStats?.runs || 0,
+                                wickets: bowlingStats?.wickets || 0,
+                                bestBowling: '0/0'
+                            });
+                        }
+                    }
+
+                    console.log(`✅ Updated stats for ${playersToUpdate.size} players`);
+                } catch (error) {
+                    console.error('Error updating player stats:', error);
+                }
+            };
+
+            const fetchPlayerStats = async () => {
+                if (!user || !db) {
+                    setAllPlayerStats([]);
+                    return;
+                }
+
+                try {
+                    const snapshot = await db.collection('playerStats')
+                        .where('userId', '==', user.uid)
+                        .get();
+
+                    const stats = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        // Calculate averages
+                        const innings = data.totalInnings || 0;
+                        const outs = innings - (data.notOuts || 0);
+                        const battingAvg = outs > 0 ? (data.totalRuns / outs).toFixed(2) : 'N/A';
+                        const strikeRate = data.totalBalls > 0 ? ((data.totalRuns / data.totalBalls) * 100).toFixed(2) : '0.00';
+                        const bowlingAvg = data.wickets > 0 ? (data.runsConceded / data.wickets).toFixed(2) : 'N/A';
+                        const economy = data.ballsBowled > 0 ? ((data.runsConceded / (data.ballsBowled / 6)) ).toFixed(2) : '0.00';
+
+                        stats.push({
+                            id: doc.id,
+                            ...data,
+                            battingAvg,
+                            strikeRate,
+                            bowlingAvg,
+                            economy
+                        });
+                    });
+
+                    // Sort by total runs (highest first)
+                    stats.sort((a, b) => (b.totalRuns || 0) - (a.totalRuns || 0));
+                    setAllPlayerStats(stats);
+                    console.log(`✅ Loaded stats for ${stats.length} players`);
+                } catch (error) {
+                    console.error('Error fetching player stats:', error);
+                }
+            };
+
             const updateBatsmanStats = (batsmanIndex, runs, isBall = true) => {
                 setBatsmanStats(prev => {
                     const stats = prev[batsmanIndex] || { runs: 0, balls: 0, fours: 0, sixes: 0, strikeRate: 0, status: 'batting', dismissal: null };
@@ -713,19 +865,45 @@
                 setWickets(newWickets);
                 setBallHistory([...ballHistory, newBallData]);
                 setCurrentOver([...currentOver, 'W']);
-
-                // Show new batsman selection modal
-                setOutBatsmanPosition('striker');
-                setShowSelectNewBatsman(true);
                 setStriker(newStriker);
                 setNonStriker(newNonStriker);
 
-                // Check if innings complete
-                if (newWickets >= 10 || newOvers >= totalOvers) {
-                    endInnings(newRuns, newWickets, newOvers, newBalls);
-                } else if (innings === 2 && target && newRuns >= target) {
-                    endMatch(newRuns, newWickets, newOvers, newBalls);
+                // Check if innings/match complete BEFORE showing batsman selection
+                // Rule 1: All Out (maxWickets - team is all out)
+                if (newWickets >= maxWickets) {
+                    console.log(`🏁 ALL OUT! ${newWickets} wickets fallen (max: ${maxWickets})`);
+                    setTimeout(() => {
+                        alert(`🏁 ALL OUT! ${battingTeam === 'team1' ? team1Name : team2Name} all out for ${newRuns} runs (${newWickets}/${totalBattingPlayers} players)`);
+                        endInnings(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
                 }
+
+                // Rule 2: Overs Complete (all allocated overs bowled)
+                if (newOvers >= totalOvers) {
+                    console.log('🏁 OVERS COMPLETE! Innings ended');
+                    setTimeout(() => {
+                        alert(`🏁 OVERS COMPLETE! ${newOvers} overs bowled`);
+                        endInnings(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
+                }
+
+                // Rule 3: Target Chased (2nd innings only - team has won)
+                if (innings === 2 && target && newRuns >= target) {
+                    console.log('🎉 TARGET CHASED! Match won');
+                    setTimeout(() => {
+                        const wicketsRemaining = maxWickets - newWickets;
+                        const ballsRemaining = (totalOvers * 6) - ((newOvers * 6) + newBalls);
+                        alert(`🎉 ${battingTeam === 'team1' ? team1Name : team2Name} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''} with ${ballsRemaining} ball${ballsRemaining !== 1 ? 's' : ''} remaining!`);
+                        endMatch(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
+                }
+
+                // If innings continues, show new batsman selection modal
+                setOutBatsmanPosition('striker');
+                setShowSelectNewBatsman(true);
             };
 
             const selectNewBatsman = (batsmanIndex) => {
@@ -873,10 +1051,50 @@
                 setBallHistory([...ballHistory, newBallData]);
                 setCurrentOver([...currentOver, ballText]);
 
-                if (newWickets >= 10 || newOvers >= totalOvers) {
-                    endInnings(newRuns, newWickets, newOvers, newBalls);
-                } else if (innings === 2 && target && newRuns >= target) {
-                    endMatch(newRuns, newWickets, newOvers, newBalls);
+                // Check innings/match end conditions
+                // Rule 1: Target Chased (2nd innings only - team has won)
+                // Check this FIRST as it's the most exciting outcome
+                if (innings === 2 && target && newRuns >= target) {
+                    console.log('🎉 TARGET CHASED! Match won');
+                    setTimeout(() => {
+                        const wicketsRemaining = maxWickets - newWickets;
+                        const ballsRemaining = (totalOvers * 6) - ((newOvers * 6) + newBalls);
+                        alert(`🎉 MATCH WON!\n\n${battingTeam === 'team1' ? team1Name : team2Name} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''} with ${ballsRemaining} ball${ballsRemaining !== 1 ? 's' : ''} remaining!`);
+                        endMatch(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
+                }
+
+                // Rule 2: Overs Complete (all allocated overs bowled)
+                if (newOvers >= totalOvers) {
+                    console.log('🏁 OVERS COMPLETE! Innings ended');
+                    setTimeout(() => {
+                        if (innings === 1) {
+                            alert(`🏁 INNINGS COMPLETE!\n\n${battingTeam === 'team1' ? team1Name : team2Name}: ${newRuns}/${newWickets} (${newOvers} overs)\n\nTarget for ${battingTeam === 'team1' ? team2Name : team1Name}: ${newRuns + 1} runs`);
+                        } else {
+                            // Second innings complete - determine result
+                            const target1 = target;
+                            if (newRuns < target1) {
+                                const runsDiff = target1 - newRuns - 1;
+                                alert(`🏁 MATCH COMPLETE!\n\n${battingTeam === 'team1' ? team2Name : team1Name} won by ${runsDiff} run${runsDiff !== 1 ? 's' : ''}!`);
+                            } else if (newRuns === target1 - 1) {
+                                alert(`🏁 MATCH TIED!\n\nBoth teams scored ${newRuns} runs!`);
+                            }
+                        }
+                        endInnings(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
+                }
+
+                // Rule 3: All Out (maxWickets - already handled in processWicket)
+                // This check is here for safety but shouldn't normally trigger
+                if (newWickets >= maxWickets) {
+                    console.log(`🏁 ALL OUT! (Safety check triggered - ${newWickets} wickets, max: ${maxWickets})`);
+                    setTimeout(() => {
+                        alert(`🏁 ALL OUT!\n\n${battingTeam === 'team1' ? team1Name : team2Name} all out for ${newRuns} runs (${newWickets}/${totalBattingPlayers} players)`);
+                        endInnings(newRuns, newWickets, newOvers, newBalls);
+                    }, 100);
+                    return;
                 }
             };
 
@@ -956,10 +1174,16 @@
             const getMatchResult = () => {
                 if (!innings1Data || !innings2Data) return '';
 
+                // Determine which team batted second and calculate their max wickets
+                const team2BattingPlayers = (battingTeam === 'team2' ? team2Players : team1Players).filter(p => p.trim() !== '');
+                const team2MaxWickets = team2BattingPlayers.length > 0 ? team2BattingPlayers.length - 1 : 10;
+
                 if (innings2Data.runs > innings1Data.runs) {
-                    return `${battingTeam === 'team2' ? team2Name : team1Name} won by ${10 - innings2Data.wickets} wickets`;
+                    const wicketsRemaining = team2MaxWickets - innings2Data.wickets;
+                    return `${battingTeam === 'team2' ? team2Name : team1Name} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''}`;
                 } else if (innings2Data.runs < innings1Data.runs) {
-                    return `${battingTeam === 'team1' ? team2Name : team1Name} won by ${innings1Data.runs - innings2Data.runs} runs`;
+                    const runsDiff = innings1Data.runs - innings2Data.runs;
+                    return `${battingTeam === 'team1' ? team2Name : team1Name} won by ${runsDiff} run${runsDiff !== 1 ? 's' : ''}`;
                 } else {
                     return 'Match Tied';
                 }
@@ -1144,6 +1368,10 @@
 
                 try {
                     await db.collection('cricketMatches').doc(matchData.id).set(matchData);
+
+                    // Update player statistics
+                    await updatePlayerStatsInFirestore(matchData);
+
                     alert(`✅ Match saved to cloud: ${matchName}`);
                     await fetchCloudMatches(); // Refresh cloud matches list
                 } catch (error) {
@@ -1559,6 +1787,24 @@
                                         Team Library
                                     </button>
                                 </div>
+
+                                {/* Player Stats */}
+                                <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all hover:scale-105">
+                                    <div className="text-5xl mb-4">📈</div>
+                                    <h3 className="text-2xl font-bold text-gray-800 mb-2">Player Stats</h3>
+                                    <p className="text-gray-600 mb-4">View cumulative statistics for all players across matches</p>
+                                    <button
+                                        onClick={() => {
+                                            console.log('🔍 Opening Player Stats...');
+                                            console.log('User logged in:', !!user);
+                                            console.log('User email:', user?.email);
+                                            fetchPlayerStats();
+                                            setShowPlayerStats(true);
+                                            console.log('Modal state set to true');
+                                        }}
+                                        className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all">
+                                        View Player Stats
+                                    </button>                                </div>
                             </div>
 
                             {/* Recent Matches */}
@@ -2305,6 +2551,310 @@
                         </div>
                     )}
 
+                    {/* Player Stats Modal */}
+                    {showPlayerStats && !selectedPlayer && (() => {
+                        console.log('🎨 Rendering Player Stats Modal');
+                        console.log('User:', user?.email);
+                        console.log('All player stats:', allPlayerStats.length);
+                        console.log('Stats filter:', statsFilter);
+
+                        const filteredStats = statsFilter === 'all'
+                            ? allPlayerStats
+                            : statsFilter === 'batting'
+                            ? allPlayerStats.filter(p => p.totalInnings > 0)
+                            : allPlayerStats.filter(p => p.wickets > 0);
+
+                        console.log('Filtered stats:', filteredStats.length);
+
+                        return (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-8">
+                                    {/* Header */}
+                                    <div className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white p-6 rounded-t-2xl">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <h2 className="text-3xl font-bold mb-2">📈 Player Statistics</h2>
+                                                <p className="text-indigo-100">
+                                                    {user ? `Viewing stats for ${user.email}` : 'Guest Mode'}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => setShowPlayerStats(false)}
+                                                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
+                                            >
+                                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Filter Buttons */}
+                                    <div className="p-6 border-b">
+                                        <div className="flex gap-3 flex-wrap">
+                                            <button
+                                                onClick={() => setStatsFilter('all')}
+                                                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                                    statsFilter === 'all'
+                                                        ? 'bg-indigo-500 text-white shadow-lg'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                All Players ({allPlayerStats.length})
+                                            </button>
+                                            <button
+                                                onClick={() => setStatsFilter('batting')}
+                                                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                                    statsFilter === 'batting'
+                                                        ? 'bg-green-500 text-white shadow-lg'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                Batsmen ({allPlayerStats.filter(p => p.totalInnings > 0).length})
+                                            </button>
+                                            <button
+                                                onClick={() => setStatsFilter('bowling')}
+                                                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                                    statsFilter === 'bowling'
+                                                        ? 'bg-red-500 text-white shadow-lg'
+                                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                }`}
+                                            >
+                                                Bowlers ({allPlayerStats.filter(p => p.wickets > 0).length})
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Stats Content */}
+                                    <div className="p-6 max-h-96 overflow-y-auto">
+                                        {!user ? (
+                                            <div className="text-center py-12">
+                                                <div className="text-6xl mb-4">🔒</div>
+                                                <p className="text-xl text-gray-600 mb-4">Please log in to view player statistics</p>
+                                                <p className="text-gray-500">Player stats are saved per user account</p>
+                                            </div>
+                                        ) : filteredStats.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <div className="text-6xl mb-4">📊</div>
+                                                <p className="text-xl text-gray-600 mb-4">No player statistics yet</p>
+                                                <p className="text-gray-500">
+                                                    {statsFilter === 'all'
+                                                        ? 'Save some matches to build player statistics'
+                                                        : statsFilter === 'batting'
+                                                        ? 'No batting statistics available'
+                                                        : 'No bowling statistics available'
+                                                    }
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {filteredStats.map((player, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer"
+                                                        onClick={() => setSelectedPlayer(player)}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div>
+                                                                <h3 className="text-xl font-bold text-gray-800">{player.playerName}</h3>
+                                                                <p className="text-sm text-gray-500">{player.totalMatches} matches</p>
+                                                            </div>
+                                                            <button className="text-indigo-500 hover:text-indigo-700 font-semibold">
+                                                                View Details →
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                            {/* Batting Stats */}
+                                                            {player.totalInnings > 0 && (
+                                                                <>
+                                                                    <div className="bg-green-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-green-600 font-semibold mb-1">RUNS</div>
+                                                                        <div className="text-2xl font-bold text-green-700">{player.totalRuns}</div>
+                                                                        <div className="text-xs text-gray-600">in {player.totalInnings} innings</div>
+                                                                    </div>
+                                                                    <div className="bg-blue-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-blue-600 font-semibold mb-1">AVERAGE</div>
+                                                                        <div className="text-2xl font-bold text-blue-700">{player.battingAvg}</div>
+                                                                        <div className="text-xs text-gray-600">High: {player.highScore}</div>
+                                                                    </div>
+                                                                    <div className="bg-purple-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-purple-600 font-semibold mb-1">STRIKE RATE</div>
+                                                                        <div className="text-2xl font-bold text-purple-700">{player.strikeRate}</div>
+                                                                        <div className="text-xs text-gray-600">{player.totalBalls} balls</div>
+                                                                    </div>
+                                                                    <div className="bg-yellow-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-yellow-600 font-semibold mb-1">BOUNDARIES</div>
+                                                                        <div className="text-2xl font-bold text-yellow-700">{player.fours + player.sixes}</div>
+                                                                        <div className="text-xs text-gray-600">{player.fours}×4s, {player.sixes}×6s</div>
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            {/* Bowling Stats */}
+                                                            {player.wickets > 0 && (
+                                                                <>
+                                                                    <div className="bg-red-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-red-600 font-semibold mb-1">WICKETS</div>
+                                                                        <div className="text-2xl font-bold text-red-700">{player.wickets}</div>
+                                                                        <div className="text-xs text-gray-600">Avg: {player.bowlingAvg}</div>
+                                                                    </div>
+                                                                    <div className="bg-orange-50 rounded-lg p-3">
+                                                                        <div className="text-xs text-orange-600 font-semibold mb-1">ECONOMY</div>
+                                                                        <div className="text-2xl font-bold text-orange-700">{player.economy}</div>
+                                                                        <div className="text-xs text-gray-600">{Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} overs</div>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="p-6 border-t bg-gray-50 rounded-b-2xl">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-sm text-gray-600">
+                                                Stats update automatically after each saved match
+                                            </p>
+                                            <button
+                                                onClick={() => setShowPlayerStats(false)}
+                                                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition-colors"
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Player Detail Modal */}
+                    {selectedPlayer && (() => {
+                        return (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-screen overflow-y-auto">
+                                    {/* Header */}
+                                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-t-2xl sticky top-0">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <h2 className="text-3xl font-bold mb-1">{selectedPlayer.playerName}</h2>
+                                                <p className="text-indigo-100">Complete Statistics</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setSelectedPlayer(null)}
+                                                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
+                                            >
+                                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6">
+                                        {/* Overview */}
+                                        <div className="mb-6">
+                                            <h3 className="text-xl font-bold text-gray-800 mb-3">📊 Overview</h3>
+                                            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <div className="text-sm text-gray-600">Total Matches</div>
+                                                        <div className="text-2xl font-bold text-gray-800">{selectedPlayer.totalMatches}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm text-gray-600">Innings Batted</div>
+                                                        <div className="text-2xl font-bold text-gray-800">{selectedPlayer.totalInnings}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Batting Stats */}
+                                        {selectedPlayer.totalInnings > 0 && (
+                                            <div className="mb-6">
+                                                <h3 className="text-xl font-bold text-gray-800 mb-3">🏏 Batting Statistics</h3>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-green-50 rounded-lg p-4">
+                                                        <div className="text-sm text-green-600 font-semibold">Total Runs</div>
+                                                        <div className="text-3xl font-bold text-green-700">{selectedPlayer.totalRuns}</div>
+                                                    </div>
+                                                    <div className="bg-blue-50 rounded-lg p-4">
+                                                        <div className="text-sm text-blue-600 font-semibold">Balls Faced</div>
+                                                        <div className="text-3xl font-bold text-blue-700">{selectedPlayer.totalBalls}</div>
+                                                    </div>
+                                                    <div className="bg-purple-50 rounded-lg p-4">
+                                                        <div className="text-sm text-purple-600 font-semibold">Batting Average</div>
+                                                        <div className="text-3xl font-bold text-purple-700">{selectedPlayer.battingAvg}</div>
+                                                        <div className="text-xs text-gray-600">{selectedPlayer.notOuts} not outs</div>
+                                                    </div>
+                                                    <div className="bg-pink-50 rounded-lg p-4">
+                                                        <div className="text-sm text-pink-600 font-semibold">Strike Rate</div>
+                                                        <div className="text-3xl font-bold text-pink-700">{selectedPlayer.strikeRate}</div>
+                                                    </div>
+                                                    <div className="bg-yellow-50 rounded-lg p-4">
+                                                        <div className="text-sm text-yellow-600 font-semibold">High Score</div>
+                                                        <div className="text-3xl font-bold text-yellow-700">{selectedPlayer.highScore}</div>
+                                                    </div>
+                                                    <div className="bg-orange-50 rounded-lg p-4">
+                                                        <div className="text-sm text-orange-600 font-semibold">Boundaries</div>
+                                                        <div className="text-3xl font-bold text-orange-700">{selectedPlayer.fours + selectedPlayer.sixes}</div>
+                                                        <div className="text-xs text-gray-600">{selectedPlayer.fours}×4s, {selectedPlayer.sixes}×6s</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Bowling Stats */}
+                                        {selectedPlayer.wickets > 0 && (
+                                            <div className="mb-6">
+                                                <h3 className="text-xl font-bold text-gray-800 mb-3">⚾ Bowling Statistics</h3>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-red-50 rounded-lg p-4">
+                                                        <div className="text-sm text-red-600 font-semibold">Wickets</div>
+                                                        <div className="text-3xl font-bold text-red-700">{selectedPlayer.wickets}</div>
+                                                    </div>
+                                                    <div className="bg-orange-50 rounded-lg p-4">
+                                                        <div className="text-sm text-orange-600 font-semibold">Runs Conceded</div>
+                                                        <div className="text-3xl font-bold text-orange-700">{selectedPlayer.runsConceded}</div>
+                                                    </div>
+                                                    <div className="bg-amber-50 rounded-lg p-4">
+                                                        <div className="text-sm text-amber-600 font-semibold">Bowling Average</div>
+                                                        <div className="text-3xl font-bold text-amber-700">{selectedPlayer.bowlingAvg}</div>
+                                                    </div>
+                                                    <div className="bg-lime-50 rounded-lg p-4">
+                                                        <div className="text-sm text-lime-600 font-semibold">Economy Rate</div>
+                                                        <div className="text-3xl font-bold text-lime-700">{selectedPlayer.economy}</div>
+                                                    </div>
+                                                    <div className="bg-teal-50 rounded-lg p-4 col-span-2">
+                                                        <div className="text-sm text-teal-600 font-semibold">Overs Bowled</div>
+                                                        <div className="text-3xl font-bold text-teal-700">
+                                                            {Math.floor(selectedPlayer.ballsBowled / 6)}.{selectedPlayer.ballsBowled % 6}
+                                                        </div>
+                                                        <div className="text-xs text-gray-600">{selectedPlayer.ballsBowled} balls</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="p-6 border-t bg-gray-50 rounded-b-2xl sticky bottom-0">
+                                        <button
+                                            onClick={() => setSelectedPlayer(null)}
+                                            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-lg transition-colors"
+                                        >
+                                            Close Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Login/Signup Modal */}
                     {showAuthModal && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -2645,6 +3195,312 @@
                                     className="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-xl transition-colors"
                                 >
                                     Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // PLAYER STATS MODAL
+            const PlayerStatsModal = () => {
+                console.log('🎨 Rendering PlayerStatsModal');
+                console.log('User:', user?.email);
+                console.log('All player stats:', allPlayerStats.length);
+                console.log('Stats filter:', statsFilter);
+
+                const filteredStats = statsFilter === 'all'
+                    ? allPlayerStats
+                    : statsFilter === 'batting'
+                    ? allPlayerStats.filter(p => p.totalInnings > 0)
+                    : allPlayerStats.filter(p => p.wickets > 0);
+
+                console.log('Filtered stats:', filteredStats.length);
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full my-8">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white p-6 rounded-t-2xl">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h2 className="text-3xl font-bold mb-2">📈 Player Statistics</h2>
+                                        <p className="text-indigo-100">
+                                            {user ? `Viewing stats for ${user.email}` : 'Guest Mode'}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowPlayerStats(false)}
+                                        className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
+                                    >
+                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Filter Buttons */}
+                            <div className="p-6 border-b">
+                                <div className="flex gap-3 flex-wrap">
+                                    <button
+                                        onClick={() => setStatsFilter('all')}
+                                        className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                            statsFilter === 'all'
+                                                ? 'bg-indigo-500 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        All Players ({allPlayerStats.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setStatsFilter('batting')}
+                                        className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                            statsFilter === 'batting'
+                                                ? 'bg-green-500 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Batsmen ({allPlayerStats.filter(p => p.totalInnings > 0).length})
+                                    </button>
+                                    <button
+                                        onClick={() => setStatsFilter('bowling')}
+                                        className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                                            statsFilter === 'bowling'
+                                                ? 'bg-red-500 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        Bowlers ({allPlayerStats.filter(p => p.wickets > 0).length})
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Stats Content */}
+                            <div className="p-6 max-h-96 overflow-y-auto">
+                                {!user ? (
+                                    <div className="text-center py-12">
+                                        <div className="text-6xl mb-4">🔒</div>
+                                        <p className="text-xl text-gray-600 mb-4">Please log in to view player statistics</p>
+                                        <p className="text-gray-500">Player stats are saved per user account</p>
+                                    </div>
+                                ) : filteredStats.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <div className="text-6xl mb-4">📊</div>
+                                        <p className="text-xl text-gray-600 mb-4">No player statistics yet</p>
+                                        <p className="text-gray-500">
+                                            {statsFilter === 'all'
+                                                ? 'Save some matches to build player statistics'
+                                                : statsFilter === 'batting'
+                                                ? 'No batting statistics available'
+                                                : 'No bowling statistics available'
+                                            }
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {filteredStats.map((player, index) => (
+                                            <div
+                                                key={index}
+                                                className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all cursor-pointer"
+                                                onClick={() => setSelectedPlayer(player)}
+                                            >
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-gray-800">{player.playerName}</h3>
+                                                        <p className="text-sm text-gray-500">{player.totalMatches} matches</p>
+                                                    </div>
+                                                    <button className="text-indigo-500 hover:text-indigo-700 font-semibold">
+                                                        View Details →
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    {/* Batting Stats */}
+                                                    {player.totalInnings > 0 && (
+                                                        <>
+                                                            <div className="bg-green-50 rounded-lg p-3">
+                                                                <div className="text-xs text-green-600 font-semibold mb-1">RUNS</div>
+                                                                <div className="text-2xl font-bold text-green-700">{player.totalRuns}</div>
+                                                                <div className="text-xs text-gray-600">in {player.totalInnings} innings</div>
+                                                            </div>
+                                                            <div className="bg-blue-50 rounded-lg p-3">
+                                                                <div className="text-xs text-blue-600 font-semibold mb-1">AVERAGE</div>
+                                                                <div className="text-2xl font-bold text-blue-700">{player.battingAvg}</div>
+                                                                <div className="text-xs text-gray-600">High: {player.highScore}</div>
+                                                            </div>
+                                                            <div className="bg-purple-50 rounded-lg p-3">
+                                                                <div className="text-xs text-purple-600 font-semibold mb-1">STRIKE RATE</div>
+                                                                <div className="text-2xl font-bold text-purple-700">{player.strikeRate}</div>
+                                                                <div className="text-xs text-gray-600">{player.totalBalls} balls</div>
+                                                            </div>
+                                                            <div className="bg-yellow-50 rounded-lg p-3">
+                                                                <div className="text-xs text-yellow-600 font-semibold mb-1">BOUNDARIES</div>
+                                                                <div className="text-2xl font-bold text-yellow-700">{player.fours + player.sixes}</div>
+                                                                <div className="text-xs text-gray-600">{player.fours}×4s, {player.sixes}×6s</div>
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {/* Bowling Stats */}
+                                                    {player.wickets > 0 && (
+                                                        <>
+                                                            <div className="bg-red-50 rounded-lg p-3">
+                                                                <div className="text-xs text-red-600 font-semibold mb-1">WICKETS</div>
+                                                                <div className="text-2xl font-bold text-red-700">{player.wickets}</div>
+                                                                <div className="text-xs text-gray-600">Avg: {player.bowlingAvg}</div>
+                                                            </div>
+                                                            <div className="bg-orange-50 rounded-lg p-3">
+                                                                <div className="text-xs text-orange-600 font-semibold mb-1">ECONOMY</div>
+                                                                <div className="text-2xl font-bold text-orange-700">{player.economy}</div>
+                                                                <div className="text-xs text-gray-600">{Math.floor(player.ballsBowled / 6)}.{player.ballsBowled % 6} overs</div>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-6 border-t bg-gray-50 rounded-b-2xl">
+                                <div className="flex justify-between items-center">
+                                    <p className="text-sm text-gray-600">
+                                        Stats update automatically after each saved match
+                                    </p>
+                                    <button
+                                        onClick={() => setShowPlayerStats(false)}
+                                        className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // PLAYER DETAIL MODAL
+            const PlayerDetailModal = () => {
+                if (!selectedPlayer) return null;
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-screen overflow-y-auto">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-t-2xl sticky top-0">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h2 className="text-3xl font-bold mb-1">{selectedPlayer.playerName}</h2>
+                                        <p className="text-indigo-100">Complete Statistics</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedPlayer(null)}
+                                        className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
+                                    >
+                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6">
+                                {/* Overview */}
+                                <div className="mb-6">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-3">📊 Overview</h3>
+                                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <div className="text-sm text-gray-600">Total Matches</div>
+                                                <div className="text-2xl font-bold text-gray-800">{selectedPlayer.totalMatches}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-sm text-gray-600">Innings Batted</div>
+                                                <div className="text-2xl font-bold text-gray-800">{selectedPlayer.totalInnings}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Batting Stats */}
+                                {selectedPlayer.totalInnings > 0 && (
+                                    <div className="mb-6">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-3">🏏 Batting Statistics</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-green-50 rounded-lg p-4">
+                                                <div className="text-sm text-green-600 font-semibold">Total Runs</div>
+                                                <div className="text-3xl font-bold text-green-700">{selectedPlayer.totalRuns}</div>
+                                            </div>
+                                            <div className="bg-blue-50 rounded-lg p-4">
+                                                <div className="text-sm text-blue-600 font-semibold">Balls Faced</div>
+                                                <div className="text-3xl font-bold text-blue-700">{selectedPlayer.totalBalls}</div>
+                                            </div>
+                                            <div className="bg-purple-50 rounded-lg p-4">
+                                                <div className="text-sm text-purple-600 font-semibold">Batting Average</div>
+                                                <div className="text-3xl font-bold text-purple-700">{selectedPlayer.battingAvg}</div>
+                                                <div className="text-xs text-gray-600">{selectedPlayer.notOuts} not outs</div>
+                                            </div>
+                                            <div className="bg-pink-50 rounded-lg p-4">
+                                                <div className="text-sm text-pink-600 font-semibold">Strike Rate</div>
+                                                <div className="text-3xl font-bold text-pink-700">{selectedPlayer.strikeRate}</div>
+                                            </div>
+                                            <div className="bg-yellow-50 rounded-lg p-4">
+                                                <div className="text-sm text-yellow-600 font-semibold">High Score</div>
+                                                <div className="text-3xl font-bold text-yellow-700">{selectedPlayer.highScore}</div>
+                                            </div>
+                                            <div className="bg-orange-50 rounded-lg p-4">
+                                                <div className="text-sm text-orange-600 font-semibold">Boundaries</div>
+                                                <div className="text-3xl font-bold text-orange-700">{selectedPlayer.fours + selectedPlayer.sixes}</div>
+                                                <div className="text-xs text-gray-600">{selectedPlayer.fours}×4s, {selectedPlayer.sixes}×6s</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Bowling Stats */}
+                                {selectedPlayer.wickets > 0 && (
+                                    <div className="mb-6">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-3">⚾ Bowling Statistics</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-red-50 rounded-lg p-4">
+                                                <div className="text-sm text-red-600 font-semibold">Wickets</div>
+                                                <div className="text-3xl font-bold text-red-700">{selectedPlayer.wickets}</div>
+                                            </div>
+                                            <div className="bg-orange-50 rounded-lg p-4">
+                                                <div className="text-sm text-orange-600 font-semibold">Runs Conceded</div>
+                                                <div className="text-3xl font-bold text-orange-700">{selectedPlayer.runsConceded}</div>
+                                            </div>
+                                            <div className="bg-amber-50 rounded-lg p-4">
+                                                <div className="text-sm text-amber-600 font-semibold">Bowling Average</div>
+                                                <div className="text-3xl font-bold text-amber-700">{selectedPlayer.bowlingAvg}</div>
+                                            </div>
+                                            <div className="bg-lime-50 rounded-lg p-4">
+                                                <div className="text-sm text-lime-600 font-semibold">Economy Rate</div>
+                                                <div className="text-3xl font-bold text-lime-700">{selectedPlayer.economy}</div>
+                                            </div>
+                                            <div className="bg-teal-50 rounded-lg p-4 col-span-2">
+                                                <div className="text-sm text-teal-600 font-semibold">Overs Bowled</div>
+                                                <div className="text-3xl font-bold text-teal-700">
+                                                    {Math.floor(selectedPlayer.ballsBowled / 6)}.{selectedPlayer.ballsBowled % 6}
+                                                </div>
+                                                <div className="text-xs text-gray-600">{selectedPlayer.ballsBowled} balls</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-6 border-t bg-gray-50 rounded-b-2xl sticky bottom-0">
+                                <button
+                                    onClick={() => setSelectedPlayer(null)}
+                                    className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 rounded-lg transition-colors"
+                                >
+                                    Close Details
                                 </button>
                             </div>
                         </div>
