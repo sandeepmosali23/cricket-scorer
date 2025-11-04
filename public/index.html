@@ -15,6 +15,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
+    <!-- Cricket Scorer Pro - Modular Scripts -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/cricket-rules.js"></script>
+    <script src="js/player-stats.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -43,36 +48,8 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Firebase Configuration
-        // IMPORTANT: Replace with your Firebase project credentials
-        const firebaseConfig = {
-            apiKey: "AIzaSyBzsz_Hn5PgQUUm80EFqoWi_65zlfeVleg",
-            authDomain: "cricket-scorer-pro-95b9d.firebaseapp.com",
-            projectId: "cricket-scorer-pro-95b9d",
-            storageBucket: "cricket-scorer-pro-95b9d.firebasestorage.app",
-            messagingSenderId: "354364037961",
-            appId: "1:354364037961:web:228b5d906089b07f38d898",
-            measurementId: "G-NFQRG4XNL5"
-        };
-
-        // Initialize Firebase
-        let db = null;
-        let auth = null;
-        let firebaseInitialized = false;
-
-        try {
-            if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== 'YOUR_API_KEY_HERE') {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-                auth = firebase.auth();
-                firebaseInitialized = true;
-                console.log('✅ Firebase initialized successfully (Firestore + Auth)');
-            } else {
-                console.warn('⚠️ Firebase not configured. Using localStorage only. See firebase-config.js for setup instructions.');
-            }
-        } catch (error) {
-            console.error('❌ Firebase initialization error:', error);
-        }
+        // Firebase is now initialized in js/firebase-config.js
+        // Variables available: db, auth, firebaseInitialized
 
         function CricketScorer() {
             // Setup state
@@ -273,6 +250,15 @@
 
                 return () => unsubscribe();
             }, []);
+
+            // Debug: Monitor modal state changes
+            useEffect(() => {
+                console.log('🔍 Modal state changed - showMatchHistory:', showMatchHistory);
+            }, [showMatchHistory]);
+
+            useEffect(() => {
+                console.log('🔍 Modal state changed - showMatchResults:', showMatchResults);
+            }, [showMatchResults]);
 
             // Authentication Functions
             const signUpWithEmail = async () => {
@@ -1758,7 +1744,12 @@
                                     <h3 className="text-2xl font-bold text-gray-800 mb-2">Load Match</h3>
                                     <p className="text-gray-600 mb-4">Continue scoring a saved match or review past matches</p>
                                     <button
-                                        onClick={() => setShowMatchHistory(true)}
+                                        onClick={() => {
+                                            console.log('📂 Browse Matches button clicked');
+                                            console.log('Current showMatchHistory:', showMatchHistory);
+                                            setShowMatchHistory(true);
+                                            console.log('Set showMatchHistory to true');
+                                        }}
                                         className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all">
                                         Browse Matches
                                     </button>
@@ -1770,7 +1761,12 @@
                                     <h3 className="text-2xl font-bold text-gray-800 mb-2">Match Results</h3>
                                     <p className="text-gray-600 mb-4">Browse and analyze all your saved match results and stats</p>
                                     <button
-                                        onClick={() => setShowMatchResults(true)}
+                                        onClick={() => {
+                                            console.log('📊 View Results button clicked');
+                                            console.log('Current showMatchResults:', showMatchResults);
+                                            setShowMatchResults(true);
+                                            console.log('Set showMatchResults to true');
+                                        }}
                                         className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all">
                                         View Results
                                     </button>
@@ -1994,11 +1990,16 @@
                     {/* End max-w-7xl container */}
 
                     {/* Match History Modal - for home page */}
-                    {showMatchHistory && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
-                                <div className={`bg-gradient-to-r ${storageMode === 'cloud' ? 'from-purple-600 to-indigo-600' : 'from-green-600 to-blue-600'} text-white p-6`}>
-                                    <h2 className="text-3xl font-bold">📂 Saved Matches</h2>
+                    {showMatchHistory && (() => {
+                        console.log('🎨 RENDERING Match History Modal');
+                        return (
+                            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => {
+                                console.log('🎯 Modal overlay clicked');
+                                if (e.target === e.currentTarget) setShowMatchHistory(false);
+                            }}>
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
+                                    <div className={`bg-gradient-to-r ${storageMode === 'cloud' ? 'from-purple-600 to-indigo-600' : 'from-green-600 to-blue-600'} text-white p-6`}>
+                                        <h2 className="text-3xl font-bold">📂 Saved Matches</h2>
                                     <p className="text-sm opacity-90 mt-1">
                                         {storageMode === 'cloud' ? '☁️ Loading from Firebase Cloud' : '💻 Loading from Local Storage'}
                                     </p>
@@ -2080,7 +2081,8 @@
                                 </div>
                             </div>
                         </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Match Results Modal - Browser View */}
                     {showMatchResults && !selectedMatchForView && (
@@ -4933,42 +4935,32 @@
                             </div>
                         )}
 
-                        {/* Save/Load Floating Buttons */}
-                        <div className="fixed bottom-6 right-6 flex flex-col gap-3 no-print z-40">
-                            {/* Storage Mode Toggle */}
-                            <div className="bg-white rounded-xl shadow-lg p-3 border-2 border-gray-200">
-                                <div className="text-xs font-semibold text-gray-600 mb-2 text-center">Storage Mode</div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setStorageMode('local')}
-                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
-                                            storageMode === 'local'
-                                                ? 'bg-blue-600 text-white shadow-md'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                        }`}
-                                        title="Save to browser localStorage">
-                                        💻 Local
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (!firebaseInitialized) {
-                                                alert('⚠️ Firebase not configured. Please set up Firebase (see firebase-config.js)');
-                                                return;
-                                            }
-                                            setStorageMode('cloud');
-                                            fetchCloudMatches();
-                                        }}
-                                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
-                                            storageMode === 'cloud'
-                                                ? 'bg-purple-600 text-white shadow-md'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                        }`}
-                                        title="Save to Firebase cloud">
-                                        ☁️ Cloud
-                                    </button>
-                                </div>
-                            </div>
+                        {/* Save/Load Floating Buttons - Minimal & Mobile-Friendly */}
+                        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-row gap-2 no-print z-40 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-xl">
+                            {/* Storage Mode Indicator */}
+                            <button
+                                onClick={() => {
+                                    if (storageMode === 'local') {
+                                        if (!firebaseInitialized) {
+                                            alert('⚠️ Firebase not configured');
+                                            return;
+                                        }
+                                        setStorageMode('cloud');
+                                        fetchCloudMatches();
+                                    } else {
+                                        setStorageMode('local');
+                                    }
+                                }}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-lg transition-all ${
+                                    storageMode === 'cloud' ? 'bg-purple-100' : 'bg-blue-100'
+                                }`}
+                                title={`Storage: ${storageMode === 'cloud' ? 'Cloud' : 'Local'}. Tap to switch.`}>
+                                {storageMode === 'cloud' ? '☁️' : '💻'}
+                            </button>
 
+                            <div className="w-px bg-gray-300"></div>
+
+                            {/* Save Button */}
                             <button
                                 onClick={() => {
                                     const name = prompt('Enter match name:', `${team1Name} vs ${team2Name} - ${new Date().toLocaleDateString()}`);
@@ -4980,27 +4972,27 @@
                                         }
                                     }
                                 }}
-                                className={`${
-                                    storageMode === 'cloud'
-                                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800'
-                                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
-                                } text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:scale-105`}
-                                title={`Save to ${storageMode === 'cloud' ? 'Firebase cloud' : 'browser localStorage'}`}>
-                                💾 Save {storageMode === 'cloud' ? '☁️' : '💻'}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-lg transition-all ${
+                                    storageMode === 'cloud' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-blue-500 hover:bg-blue-600'
+                                } text-white`}
+                                title={`Save to ${storageMode === 'cloud' ? 'Cloud' : 'Local'}`}>
+                                💾
                             </button>
 
+                            {/* Load Button */}
                             <button
                                 onClick={() => setShowMatchHistory(true)}
-                                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+                                className="w-8 h-8 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center text-lg transition-all"
                                 title="Load saved match">
-                                📂 Load
+                                📂
                             </button>
 
+                            {/* Results Button */}
                             <button
                                 onClick={() => setShowMatchResults(true)}
-                                className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold px-6 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+                                className="w-8 h-8 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full flex items-center justify-center text-lg transition-all"
                                 title="View match results">
-                                📊 Results
+                                📊
                             </button>
                         </div>
 
