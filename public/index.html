@@ -80,6 +80,11 @@
             const [showReturnModal, setShowReturnModal] = useState(false);
             const [returningFor, setReturningFor] = useState(null);
 
+            // Match status tracking
+            const [matchStatus, setMatchStatus] = useState('in-progress'); // 'in-progress', 'completed', 'abandoned'
+            const [abandonReason, setAbandonReason] = useState('');
+            const [showAbandonModal, setShowAbandonModal] = useState(false);
+
             // Dismissal modal state
             const [showDismissalModal, setShowDismissalModal] = useState(false);
             const [dismissalType, setDismissalType] = useState('');
@@ -1155,6 +1160,7 @@
 
             const endMatch = (finalRuns, finalWickets, finalOvers, finalBalls) => {
                 setMatchComplete(true);
+                setMatchStatus('completed');
             };
 
             const getMatchResult = () => {
@@ -1218,6 +1224,10 @@
                     striker, nonStriker, bowler,
                     ballHistory, currentOver, matchComplete, target,
                     retiredBatsmen,
+
+                    // Match status (completed, in-progress, abandoned)
+                    matchStatus,
+                    abandonReason: matchStatus === 'abandoned' ? abandonReason : null,
 
                     // Statistics
                     batsmanStats, bowlerStats,
@@ -1342,6 +1352,10 @@
                     striker, nonStriker, bowler,
                     ballHistory, currentOver, matchComplete, target,
                     retiredBatsmen,
+
+                    // Match status (completed, in-progress, abandoned)
+                    matchStatus,
+                    abandonReason: matchStatus === 'abandoned' ? abandonReason : null,
 
                     // Statistics
                     batsmanStats, bowlerStats,
@@ -1514,6 +1528,25 @@
             };
 
             const getSavedMatchResult = (match) => {
+                // Check if match was abandoned
+                if (match.matchStatus === 'abandoned') {
+                    const reasonLabels = {
+                        rain: 'Rain/Weather',
+                        darkness: 'Darkness/Bad Light',
+                        injury: 'Player Injury',
+                        mutual: 'Mutual Consent',
+                        time: 'Time Constraint',
+                        ground: 'Ground Conditions',
+                        other: 'Other Reason'
+                    };
+                    const reason = match.abandonReason ? ` (${reasonLabels[match.abandonReason] || match.abandonReason})` : '';
+                    return {
+                        status: 'Abandoned',
+                        result: `Match Abandoned${reason}`,
+                        color: 'text-red-600'
+                    };
+                }
+
                 if (!match.matchComplete) {
                     return {
                         status: 'In Progress',
@@ -2037,13 +2070,19 @@
                                                             }}>
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <h4 className="font-bold text-gray-800 text-lg">{match.name}</h4>
-                                                                <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
-                                                                    result.status === 'Completed' ? 'bg-green-100 text-green-700' :
-                                                                    result.status === 'Tied' ? 'bg-purple-100 text-purple-700' :
-                                                                    'bg-yellow-100 text-yellow-700'
-                                                                }`}>
-                                                                    {match.matchFormat}
-                                                                </span>
+                                                                <div className="flex gap-2">
+                                                                    <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                                                                        result.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                                                                        result.status === 'Abandoned' ? 'bg-red-100 text-red-700' :
+                                                                        result.status === 'Tied' ? 'bg-purple-100 text-purple-700' :
+                                                                        'bg-yellow-100 text-yellow-700'
+                                                                    }`}>
+                                                                        {result.status}
+                                                                    </span>
+                                                                    <span className="text-xs px-3 py-1 rounded-full font-semibold bg-gray-100 text-gray-700">
+                                                                        {match.matchFormat}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                             <div className="grid grid-cols-2 gap-3 text-sm mb-2">
                                                                 <div className="bg-white rounded-lg p-2 border border-gray-200">
@@ -4994,6 +5033,19 @@
                                 title="View match results">
                                 📊
                             </button>
+
+                            {/* Abandon Match Button - only show if not completed */}
+                            {!matchComplete && (
+                                <>
+                                    <div className="w-px bg-gray-300"></div>
+                                    <button
+                                        onClick={() => setShowAbandonModal(true)}
+                                        className="w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-lg transition-all"
+                                        title="Abandon match">
+                                        🚫
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         {/* Match History Modal */}
@@ -5638,6 +5690,87 @@
                                             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl">
                                             ➕ Add Player
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Abandon Match Modal */}
+                        {showAbandonModal && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                                    <div className="bg-gradient-to-r from-red-600 to-orange-600 text-white p-6">
+                                        <h2 className="text-2xl font-bold">🚫 Abandon Match</h2>
+                                        <p className="text-sm opacity-90 mt-1">Mark this match as abandoned</p>
+                                    </div>
+
+                                    <div className="p-6">
+                                        <p className="text-gray-700 mb-4">
+                                            Are you sure you want to abandon this match? The current score will be saved with the abandoned status.
+                                        </p>
+
+                                        <div className="mb-6">
+                                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                Reason for Abandonment <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={abandonReason}
+                                                onChange={(e) => setAbandonReason(e.target.value)}
+                                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-red-500 focus:outline-none transition-colors">
+                                                <option value="">Select a reason...</option>
+                                                <option value="rain">☔ Rain/Weather</option>
+                                                <option value="darkness">🌙 Darkness/Bad Light</option>
+                                                <option value="injury">🩹 Player Injury</option>
+                                                <option value="mutual">🤝 Mutual Consent</option>
+                                                <option value="time">⏰ Time Constraint</option>
+                                                <option value="ground">🏟️ Ground Conditions</option>
+                                                <option value="other">📝 Other Reason</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="text-sm text-gray-600 bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                                            <strong>Note:</strong> The match will be saved with status "Abandoned" and won't count towards team/player statistics.
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setShowAbandonModal(false);
+                                                    setAbandonReason('');
+                                                }}
+                                                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-xl transition-all">
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (!abandonReason) {
+                                                        alert('⚠️ Please select a reason for abandonment');
+                                                        return;
+                                                    }
+
+                                                    // Set match status to abandoned
+                                                    setMatchStatus('abandoned');
+                                                    setMatchComplete(true);
+                                                    setShowAbandonModal(false);
+
+                                                    // Prompt to save the abandoned match
+                                                    setTimeout(() => {
+                                                        const name = prompt('Save abandoned match as:', `${team1Name} vs ${team2Name} - ABANDONED - ${new Date().toLocaleDateString()}`);
+                                                        if (name) {
+                                                            if (storageMode === 'cloud') {
+                                                                saveMatchToCloud(name);
+                                                            } else {
+                                                                saveMatch(name);
+                                                            }
+                                                            alert(`✅ Match saved as abandoned (Reason: ${abandonReason})`);
+                                                        }
+                                                    }, 100);
+                                                }}
+                                                disabled={!abandonReason}
+                                                className="flex-1 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-3 px-6 rounded-xl transition-all">
+                                                Abandon Match
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
