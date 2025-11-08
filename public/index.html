@@ -1038,29 +1038,39 @@
                     // 2. Clear current over display
                     setCurrentOver([]);
 
-                    // 3. Show over complete notification
-                    setShowOverComplete(true);
-                    setTimeout(() => setShowOverComplete(false), 3000);
+                    // 3. Show over complete notification (only if innings continues)
+                    // Check if this over completes the innings/match BEFORE showing notifications
+                    const inningsWillEnd = (
+                        newOvers >= totalOvers || // Overs complete
+                        newWickets >= maxWickets || // All out
+                        (innings === 2 && target && newRuns >= target) // Target chased
+                    );
 
-                    // 4. Save current bowler to enforce no consecutive overs rule
-                    setLastBowler(bowler);
+                    if (!inningsWillEnd) {
+                        setShowOverComplete(true);
+                        setTimeout(() => setShowOverComplete(false), 3000);
 
-                    // 5. Check bowler over limits and show warning
-                    setTimeout(() => {
-                        const currentBowlerStats = bowlerStats[bowler] || {};
-                        const bowlerOvers = (currentBowlerStats.overs || 0) + 1;
-                        const maxOversPerBowler = Math.ceil(totalOvers / 5); // 20% of total overs
+                        // 4. Save current bowler to enforce no consecutive overs rule
+                        setLastBowler(bowler);
 
-                        if (bowlerOvers >= maxOversPerBowler) {
-                            alert(`⚠️ ${bowlingPlayers[bowler]} has bowled ${bowlerOvers} overs (limit: ${maxOversPerBowler}). MUST change bowler!`);
-                            setShowChangeBowler(true);
-                        } else if (bowlerOvers === maxOversPerBowler - 1) {
-                            alert(`⚠️ ${bowlingPlayers[bowler]} has ${maxOversPerBowler - bowlerOvers} over remaining before limit.`);
-                        } else {
-                            // Just remind to change bowler (no consecutive overs allowed)
-                            alert(`✓ Over complete! Please select a different bowler.\n(${bowlingPlayers[bowler]} cannot bowl consecutive overs)`);
-                        }
-                    }, 100);
+                        // 5. Check bowler over limits and show warning
+                        // ONLY if innings continues
+                        setTimeout(() => {
+                            const currentBowlerStats = bowlerStats[bowler] || {};
+                            const bowlerOvers = (currentBowlerStats.overs || 0) + 1;
+                            const maxOversPerBowler = Math.ceil(totalOvers / 5); // 20% of total overs
+
+                            if (bowlerOvers >= maxOversPerBowler) {
+                                alert(`⚠️ ${bowlingPlayers[bowler]} has bowled ${bowlerOvers} overs (limit: ${maxOversPerBowler}). MUST change bowler!`);
+                                setShowChangeBowler(true);
+                            } else if (bowlerOvers === maxOversPerBowler - 1) {
+                                alert(`⚠️ ${bowlingPlayers[bowler]} has ${maxOversPerBowler - bowlerOvers} over remaining before limit.`);
+                            } else {
+                                // Just remind to change bowler (no consecutive overs allowed)
+                                alert(`✓ Over complete! Please select a different bowler.\n(${bowlingPlayers[bowler]} cannot bowl consecutive overs)`);
+                            }
+                        }, 100);
+                    }
                 }
 
                 const newBallData = {
