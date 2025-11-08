@@ -1,6 +1,6 @@
 {
   "name": "cricket-scorer-pro",
-  "version": "3.7.1",
+  "version": "3.8.0",
   "description": "Professional cricket scoring application with live scoring, advanced analytics, Firebase authentication and cloud storage with user-specific data isolation, user accounts with full personalization, match results viewer, dynamic player management with manual batsman selection, cricket over rules enforcement with automatic innings/match end detection supporting variable team sizes (5-11 players), enhanced home page, team library management system, comprehensive player statistics tracking, match abandonment feature with status tracking, and cricket rules compliance (byes/leg-byes striker rotation, proper extras handling, comprehensive undo functionality)",
   "main": "public/index.html",
   "scripts": {

@@ -939,8 +939,9 @@
                     ballText = extraRuns > 0 ? `WD+${extraRuns}` : 'WD';
                     setExtras(prev => ({ ...prev, wides: prev.wides + 1 }));
 
-                    // Wide: Don't swap strike, don't add to bowler
-                    bowlerRuns = 0; // Wides don't count against bowler
+                    // Wide: All runs count against bowler (1 for wide + any extra runs)
+                    // Strike doesn't change
+                    bowlerRuns = totalRuns; // Wides DO count against bowler
                 } else if (extra === 'noball') {
                     isBall = false;
                     totalRuns = 1 + extraRuns;
@@ -948,11 +949,23 @@
                     ballText = extraRuns > 0 ? `NB+${extraRuns}` : 'NB';
                     setExtras(prev => ({ ...prev, noBalls: prev.noBalls + 1 }));
 
-                    // No Ball: Swap strike on odd runs scored off the bat (extraRuns)
+                    // No Ball: Runs off bat count for batsman
+                    // The 1 run penalty counts against bowler
+                    // Strike changes on odd runs scored off the bat
+                    if (extraRuns > 0) {
+                        updateBatsmanStats(striker, extraRuns, false); // Runs off no-ball count for batsman (not a ball faced)
+                        setCurrentPartnership(prev => ({
+                            ...prev,
+                            runs: prev.runs + extraRuns,
+                            balls: prev.balls // No-ball doesn't count as ball faced
+                        }));
+                    }
+
                     if (extraRuns % 2 !== 0) {
                         [newStriker, newNonStriker] = [nonStriker, striker];
                     }
-                    bowlerRuns = 0; // No balls don't count against bowler
+
+                    bowlerRuns = 1; // Only the 1-run penalty counts against bowler, not the runs off bat
                 } else if (extra === 'bye') {
                     isBall = true;
                     totalRuns = extraRuns;
@@ -1201,7 +1214,7 @@
                     const strikerStats = newStats[lastBall.striker] || {};
 
                     if (lastBall.extra !== 'wide' && lastBall.extra !== 'noball') {
-                        // Ball was faced
+                        // Ball was faced (byes, leg-byes, normal balls)
                         strikerStats.balls = Math.max(0, (strikerStats.balls || 0) - 1);
                     }
 
@@ -1210,11 +1223,18 @@
                         strikerStats.runs = Math.max(0, (strikerStats.runs || 0) - lastBall.runs);
                         if (lastBall.runs === 4) strikerStats.fours = Math.max(0, (strikerStats.fours || 0) - 1);
                         if (lastBall.runs === 6) strikerStats.sixes = Math.max(0, (strikerStats.sixes || 0) - 1);
-                        if (strikerStats.balls > 0) {
-                            strikerStats.strikeRate = ((strikerStats.runs / strikerStats.balls) * 100).toFixed(2);
-                        } else {
-                            strikerStats.strikeRate = '0.00';
-                        }
+                    } else if (lastBall.extra === 'noball' && lastBall.extraRuns > 0) {
+                        // Runs off no-ball bat count for batsman
+                        strikerStats.runs = Math.max(0, (strikerStats.runs || 0) - lastBall.extraRuns);
+                        if (lastBall.extraRuns === 4) strikerStats.fours = Math.max(0, (strikerStats.fours || 0) - 1);
+                        if (lastBall.extraRuns === 6) strikerStats.sixes = Math.max(0, (strikerStats.sixes || 0) - 1);
+                    }
+
+                    // Recalculate strike rate
+                    if (strikerStats.balls > 0) {
+                        strikerStats.strikeRate = ((strikerStats.runs / strikerStats.balls) * 100).toFixed(2);
+                    } else {
+                        strikerStats.strikeRate = '0.00';
                     }
 
                     newStats[lastBall.striker] = strikerStats;
@@ -1239,9 +1259,16 @@
                     // Restore runs (only runs that counted against bowler)
                     let runsToRemove = 0;
                     if (!lastBall.extra || lastBall.extra === '') {
+                        // Normal runs off bat count against bowler
                         runsToRemove = lastBall.runs;
+                    } else if (lastBall.extra === 'wide') {
+                        // Wides: 1 + extraRuns count against bowler
+                        runsToRemove = 1 + lastBall.extraRuns;
+                    } else if (lastBall.extra === 'noball') {
+                        // No-balls: Only 1 run penalty counts against bowler
+                        runsToRemove = 1;
                     }
-                    // Wides, no-balls, byes, leg-byes don't count against bowler
+                    // Byes and leg-byes don't count against bowler (runsToRemove stays 0)
                     bowlerSt.runs = Math.max(0, (bowlerSt.runs || 0) - runsToRemove);
 
                     // Restore wickets
