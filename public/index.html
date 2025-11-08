@@ -893,6 +893,9 @@
                 }
 
                 // If innings continues, show new batsman selection modal
+                console.log('✅ Wicket processed - showing new batsman selection modal');
+                console.log('Out batsman:', currentPlayers[striker]);
+                console.log('Remaining wickets:', maxWickets - newWickets);
                 setOutBatsmanPosition('striker');
                 setShowSelectNewBatsman(true);
             };
@@ -926,6 +929,7 @@
                 let newNonStriker = nonStriker;
                 let ballText = '';
                 let totalRuns = 0;
+                let bowlerRuns = 0; // Runs that count against the bowler (excludes wides and no-balls)
                 let isBall = true;
 
                 if (extra === 'wide') {
@@ -934,12 +938,21 @@
                     newRuns += totalRuns;
                     ballText = extraRuns > 0 ? `WD+${extraRuns}` : 'WD';
                     setExtras(prev => ({ ...prev, wides: prev.wides + 1 }));
+
+                    // Wide: Don't swap strike, don't add to bowler
+                    bowlerRuns = 0; // Wides don't count against bowler
                 } else if (extra === 'noball') {
                     isBall = false;
                     totalRuns = 1 + extraRuns;
                     newRuns += totalRuns;
                     ballText = extraRuns > 0 ? `NB+${extraRuns}` : 'NB';
                     setExtras(prev => ({ ...prev, noBalls: prev.noBalls + 1 }));
+
+                    // No Ball: Swap strike on odd runs scored off the bat (extraRuns)
+                    if (extraRuns % 2 !== 0) {
+                        [newStriker, newNonStriker] = [nonStriker, striker];
+                    }
+                    bowlerRuns = 0; // No balls don't count against bowler
                 } else if (extra === 'bye') {
                     isBall = true;
                     totalRuns = extraRuns;
@@ -947,6 +960,20 @@
                     newBalls += 1;
                     ballText = `B${extraRuns}`;
                     setExtras(prev => ({ ...prev, byes: prev.byes + extraRuns }));
+                    bowlerRuns = 0; // Byes don't count against bowler
+
+                    // Update batsman stats (ball faced, but no runs)
+                    updateBatsmanStats(striker, 0, true);
+                    setCurrentPartnership(prev => ({
+                        ...prev,
+                        runs: prev.runs + extraRuns,
+                        balls: prev.balls + 1
+                    }));
+
+                    // Swap strike on odd runs
+                    if (extraRuns % 2 !== 0) {
+                        [newStriker, newNonStriker] = [nonStriker, striker];
+                    }
                 } else if (extra === 'legbye') {
                     isBall = true;
                     totalRuns = extraRuns;
@@ -954,11 +981,26 @@
                     newBalls += 1;
                     ballText = `LB${extraRuns}`;
                     setExtras(prev => ({ ...prev, legByes: prev.legByes + extraRuns }));
+                    bowlerRuns = 0; // Leg byes don't count against bowler
+
+                    // Update batsman stats (ball faced, but no runs)
+                    updateBatsmanStats(striker, 0, true);
+                    setCurrentPartnership(prev => ({
+                        ...prev,
+                        runs: prev.runs + extraRuns,
+                        balls: prev.balls + 1
+                    }));
+
+                    // Swap strike on odd runs
+                    if (extraRuns % 2 !== 0) {
+                        [newStriker, newNonStriker] = [nonStriker, striker];
+                    }
                 } else {
                     isBall = true;
                     totalRuns = runsScored;
                     newRuns += totalRuns;
                     newBalls += 1;
+                    bowlerRuns = runsScored; // Normal runs count against bowler
 
                     ballText = runsScored === 0 ? '•' : runsScored.toString();
                     updateBatsmanStats(striker, runsScored, true);
@@ -973,7 +1015,9 @@
                     }
                 }
 
-                updateBowlerStats(bowler, totalRuns, false, isBall);
+                // Update bowler stats with only runs that count against them
+                // Wides, no-balls, byes, and leg-byes don't count against the bowler
+                updateBowlerStats(bowler, bowlerRuns, false, isBall);
 
                 if (isBall && newBalls === 6) {
                     newOvers += 1;
@@ -1090,11 +1134,18 @@
             };
 
             const undoLastBall = () => {
-                if (ballHistory.length === 0 || matchComplete) return;
+                if (ballHistory.length === 0 || matchComplete) {
+                    alert('⚠️ Cannot undo: No balls to undo or match is complete');
+                    return;
+                }
 
                 const lastBall = ballHistory[ballHistory.length - 1];
+                console.log('↩️ Undoing ball:', lastBall);
+
+                // Restore runs
                 setRuns(prev => prev - lastBall.totalRuns);
 
+                // Restore balls and overs
                 if (lastBall.extra !== 'wide' && lastBall.extra !== 'noball') {
                     if (balls === 0) {
                         setOvers(prev => prev - 1);
@@ -1104,14 +1155,111 @@
                     }
                 }
 
+                // Restore wickets
                 if (lastBall.wicket) {
                     setWickets(prev => prev - 1);
                     setFallOfWickets(prev => prev.slice(0, -1));
                     setPartnerships(prev => prev.slice(0, -1));
+
+                    // Restore the dismissed batsman's stats
+                    if (lastBall.outPlayer !== null && lastBall.outPlayer !== undefined) {
+                        setBatsmanStats(prev => ({
+                            ...prev,
+                            [lastBall.outPlayer]: {
+                                ...prev[lastBall.outPlayer],
+                                isOut: false,
+                                dismissal: null
+                            }
+                        }));
+                    }
                 }
 
+                // Restore extras
+                if (lastBall.extra === 'wide') {
+                    setExtras(prev => ({ ...prev, wides: Math.max(0, prev.wides - 1) }));
+                } else if (lastBall.extra === 'noball') {
+                    setExtras(prev => ({ ...prev, noBalls: Math.max(0, prev.noBalls - 1) }));
+                } else if (lastBall.extra === 'bye') {
+                    setExtras(prev => ({ ...prev, byes: Math.max(0, prev.byes - lastBall.extraRuns) }));
+                } else if (lastBall.extra === 'legbye') {
+                    setExtras(prev => ({ ...prev, legByes: Math.max(0, prev.legByes - lastBall.extraRuns) }));
+                }
+
+                // Restore batsman stats
+                setBatsmanStats(prev => {
+                    const newStats = { ...prev };
+                    const strikerStats = newStats[lastBall.striker] || {};
+
+                    if (lastBall.extra !== 'wide' && lastBall.extra !== 'noball') {
+                        // Ball was faced
+                        strikerStats.balls = Math.max(0, (strikerStats.balls || 0) - 1);
+                    }
+
+                    if (!lastBall.extra || lastBall.extra === '') {
+                        // Normal runs off the bat
+                        strikerStats.runs = Math.max(0, (strikerStats.runs || 0) - lastBall.runs);
+                        if (lastBall.runs === 4) strikerStats.fours = Math.max(0, (strikerStats.fours || 0) - 1);
+                        if (lastBall.runs === 6) strikerStats.sixes = Math.max(0, (strikerStats.sixes || 0) - 1);
+                        if (strikerStats.balls > 0) {
+                            strikerStats.strikeRate = ((strikerStats.runs / strikerStats.balls) * 100).toFixed(2);
+                        } else {
+                            strikerStats.strikeRate = '0.00';
+                        }
+                    }
+
+                    newStats[lastBall.striker] = strikerStats;
+                    return newStats;
+                });
+
+                // Restore bowler stats
+                setBowlerStats(prev => {
+                    const newStats = { ...prev };
+                    const bowlerSt = newStats[lastBall.bowler] || {};
+
+                    // Restore balls (only if it was a legal delivery)
+                    if (lastBall.extra !== 'wide' && lastBall.extra !== 'noball') {
+                        if (bowlerSt.balls === 0) {
+                            bowlerSt.overs = Math.max(0, (bowlerSt.overs || 0) - 1);
+                            bowlerSt.balls = 5;
+                        } else {
+                            bowlerSt.balls = Math.max(0, (bowlerSt.balls || 0) - 1);
+                        }
+                    }
+
+                    // Restore runs (only runs that counted against bowler)
+                    let runsToRemove = 0;
+                    if (!lastBall.extra || lastBall.extra === '') {
+                        runsToRemove = lastBall.runs;
+                    }
+                    // Wides, no-balls, byes, leg-byes don't count against bowler
+                    bowlerSt.runs = Math.max(0, (bowlerSt.runs || 0) - runsToRemove);
+
+                    // Restore wickets
+                    if (lastBall.wicket) {
+                        bowlerSt.wickets = Math.max(0, (bowlerSt.wickets || 0) - 1);
+                    }
+
+                    // Recalculate economy
+                    const totalOvers = bowlerSt.overs + (bowlerSt.balls / 6);
+                    bowlerSt.economy = totalOvers > 0 ? (bowlerSt.runs / totalOvers).toFixed(2) : '0.00';
+
+                    newStats[lastBall.bowler] = bowlerSt;
+                    return newStats;
+                });
+
+                // Restore current partnership
+                setCurrentPartnership(prev => ({
+                    batsman1: prev.batsman1,
+                    batsman2: prev.batsman2,
+                    runs: Math.max(0, prev.runs - lastBall.totalRuns),
+                    balls: Math.max(0, prev.balls - (lastBall.extra !== 'wide' && lastBall.extra !== 'noball' ? 1 : 0))
+                }));
+
+                // Remove from ball history and current over
                 setBallHistory(prev => prev.slice(0, -1));
                 setCurrentOver(prev => prev.slice(0, -1));
+
+                console.log('✅ Ball undone successfully');
             };
 
             const endInnings = (finalRuns, finalWickets, finalOvers, finalBalls) => {
