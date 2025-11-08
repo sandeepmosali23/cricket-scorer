@@ -61,6 +61,12 @@
             const [team1Players, setTeam1Players] = useState(['', '', '', '', '', '', '', '', '', '', '']);
             const [team2Players, setTeam2Players] = useState(['', '', '', '', '', '', '', '', '', '', '']);
 
+            // Toss state
+            const [showTossModal, setShowTossModal] = useState(false);
+            const [tossWinner, setTossWinner] = useState(null); // 'team1' or 'team2'
+            const [tossDecision, setTossDecision] = useState(null); // 'bat' or 'bowl'
+            const [tossComplete, setTossComplete] = useState(false);
+
             // Match state
             const [battingTeam, setBattingTeam] = useState('team1');
             const [innings, setInnings] = useState(1);
@@ -846,6 +852,7 @@
                     over: overs,
                     ball: balls,
                     striker: striker,
+                    nonStriker: nonStriker, // Save both batsmen for proper undo
                     bowler: bowler,
                     dismissal: dismissalDetails
                 };
@@ -1097,6 +1104,7 @@
                     over: overs,
                     ball: balls,
                     striker: striker,
+                    nonStriker: nonStriker, // Save both batsmen for proper undo
                     bowler: bowler
                 };
 
@@ -1191,9 +1199,20 @@
                             [lastBall.outPlayer]: {
                                 ...prev[lastBall.outPlayer],
                                 isOut: false,
-                                dismissal: null
+                                dismissal: null,
+                                status: 'batting'
                             }
                         }));
+
+                        // CRITICAL: Restore both batsmen to their positions before the wicket
+                        // The dismissed batsman was the striker
+                        setStriker(lastBall.striker);
+                        // Restore the non-striker (who was also batting when wicket fell)
+                        if (lastBall.nonStriker !== null && lastBall.nonStriker !== undefined) {
+                            setNonStriker(lastBall.nonStriker);
+                        }
+
+                        console.log(`✅ Wicket undone: ${currentPlayers[lastBall.outPlayer]} restored to batting`);
                     }
                 }
 
@@ -1404,6 +1423,11 @@
                     team1Name, team2Name, team1Players, team2Players,
                     matchFormat, totalOvers,
 
+                    // Toss data
+                    tossWinner,
+                    tossDecision,
+                    tossComplete,
+
                     // Match state
                     battingTeam, innings, runs, wickets, overs, balls,
                     striker, nonStriker, bowler,
@@ -1450,6 +1474,11 @@
                     setTeam2Players(match.team2Players);
                     setMatchFormat(match.matchFormat);
                     setTotalOvers(match.totalOvers);
+
+                    // Restore toss data
+                    setTossWinner(match.tossWinner || null);
+                    setTossDecision(match.tossDecision || null);
+                    setTossComplete(match.tossComplete || false);
 
                     // Restore match state
                     setBattingTeam(match.battingTeam);
@@ -1532,6 +1561,11 @@
                     team1Name, team2Name, team1Players, team2Players,
                     matchFormat, totalOvers,
 
+                    // Toss data
+                    tossWinner,
+                    tossDecision,
+                    tossComplete,
+
                     // Match state
                     battingTeam, innings, runs, wickets, overs, balls,
                     striker, nonStriker, bowler,
@@ -1588,6 +1622,11 @@
                     setTeam2Players(match.team2Players);
                     setMatchFormat(match.matchFormat);
                     setTotalOvers(match.totalOvers);
+
+                    // Restore toss data
+                    setTossWinner(match.tossWinner || null);
+                    setTossDecision(match.tossDecision || null);
+                    setTossComplete(match.tossComplete || false);
 
                     // Restore match state
                     setBattingTeam(match.battingTeam);
@@ -2191,7 +2230,8 @@
                                         if (team1Name && team2Name &&
                                             team1Players.filter(p => p.trim()).length >= 2 &&
                                             team2Players.filter(p => p.trim()).length >= 2) {
-                                            setSetupComplete(true);
+                                            // Show toss modal instead of starting match directly
+                                            setShowTossModal(true);
                                         } else {
                                             alert('Please enter team names and at least 2 players for each team');
                                         }
@@ -3969,6 +4009,21 @@
                                 <div>
                                     <h2 className="text-2xl font-bold mb-6 text-gray-800">Full Scorecard - {matchFormat}</h2>
 
+                                    {/* Toss Information */}
+                                    {tossComplete && (
+                                        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 mb-6">
+                                            <div className="flex items-center justify-center gap-2 mb-2">
+                                                <span className="text-xl">🪙</span>
+                                                <span className="font-bold text-gray-800">Toss</span>
+                                            </div>
+                                            <div className="text-center text-gray-700 text-sm">
+                                                <span className="font-semibold">{tossWinner === 'team1' ? team1Name : team2Name}</span>
+                                                {' '}won the toss and chose to{' '}
+                                                <span className="font-semibold">{tossDecision === 'bat' ? 'Bat First' : 'Bowl First'}</span>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* 1st Innings - Always show if exists */}
                                     {innings1Data && (
                                         <div className="mb-8 bg-gradient-to-r from-blue-50 to-green-50 p-6 rounded-xl border-2 border-blue-200">
@@ -5625,6 +5680,21 @@
                                             );
                                         })()}
 
+                                        {/* Toss Details */}
+                                        {selectedMatchForView.tossComplete && (
+                                            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-5 mb-6">
+                                                <div className="flex items-center justify-center gap-2 mb-2">
+                                                    <span className="text-2xl">🪙</span>
+                                                    <span className="text-lg font-bold text-gray-800">Toss</span>
+                                                </div>
+                                                <div className="text-center text-gray-700">
+                                                    <span className="font-semibold">{selectedMatchForView.tossWinner === 'team1' ? selectedMatchForView.team1Name : selectedMatchForView.team2Name}</span>
+                                                    {' '}won the toss and chose to{' '}
+                                                    <span className="font-semibold">{selectedMatchForView.tossDecision === 'bat' ? 'Bat First' : 'Bowl First'}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Match Details */}
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                                             <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
@@ -5875,6 +5945,123 @@
                                             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl">
                                             ➕ Add Player
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Toss Modal */}
+                        {showTossModal && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+                                    <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6">
+                                        <h2 className="text-3xl font-bold">🪙 Toss</h2>
+                                        <p className="text-sm opacity-90 mt-1">Time to decide who bats first!</p>
+                                    </div>
+
+                                    <div className="p-6">
+                                        {!tossComplete ? (
+                                            <>
+                                                <p className="text-gray-700 mb-6 text-lg text-center">
+                                                    Which team won the toss?
+                                                </p>
+
+                                                <div className="flex gap-4 mb-6">
+                                                    <button
+                                                        onClick={() => {
+                                                            setTossWinner('team1');
+                                                            console.log(`🪙 ${team1Name} won the toss`);
+                                                        }}
+                                                        className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                            tossWinner === 'team1'
+                                                                ? 'bg-green-100 border-green-500 shadow-lg scale-105'
+                                                                : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
+                                                        }`}>
+                                                        <div className="text-2xl mb-2">🏏</div>
+                                                        <div className="font-bold text-lg">{team1Name}</div>
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            setTossWinner('team2');
+                                                            console.log(`🪙 ${team2Name} won the toss`);
+                                                        }}
+                                                        className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                            tossWinner === 'team2'
+                                                                ? 'bg-blue-100 border-blue-500 shadow-lg scale-105'
+                                                                : 'bg-white border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                                                        }`}>
+                                                        <div className="text-2xl mb-2">🏏</div>
+                                                        <div className="font-bold text-lg">{team2Name}</div>
+                                                    </button>
+                                                </div>
+
+                                                {tossWinner && (
+                                                    <>
+                                                        <p className="text-gray-700 mb-4 text-lg text-center">
+                                                            {tossWinner === 'team1' ? team1Name : team2Name} elected to:
+                                                        </p>
+
+                                                        <div className="flex gap-4 mb-6">
+                                                            <button
+                                                                onClick={() => setTossDecision('bat')}
+                                                                className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                                    tossDecision === 'bat'
+                                                                        ? 'bg-purple-100 border-purple-500 shadow-lg scale-105'
+                                                                        : 'bg-white border-gray-300 hover:border-purple-400 hover:bg-purple-50'
+                                                                }`}>
+                                                                <div className="text-3xl mb-2">🏏</div>
+                                                                <div className="font-bold text-lg">Bat First</div>
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => setTossDecision('bowl')}
+                                                                className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                                    tossDecision === 'bowl'
+                                                                        ? 'bg-orange-100 border-orange-500 shadow-lg scale-105'
+                                                                        : 'bg-white border-gray-300 hover:border-orange-400 hover:bg-orange-50'
+                                                                }`}>
+                                                                <div className="text-3xl mb-2">⚾</div>
+                                                                <div className="font-bold text-lg">Bowl First</div>
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                <button
+                                                    onClick={() => {
+                                                        if (!tossWinner || !tossDecision) {
+                                                            alert('⚠️ Please select toss winner and decision');
+                                                            return;
+                                                        }
+
+                                                        // Set batting team based on toss decision
+                                                        if (tossDecision === 'bat') {
+                                                            setBattingTeam(tossWinner);
+                                                        } else {
+                                                            setBattingTeam(tossWinner === 'team1' ? 'team2' : 'team1');
+                                                        }
+
+                                                        setTossComplete(true);
+                                                        setShowTossModal(false);
+                                                        setSetupComplete(true);
+
+                                                        console.log(`✅ Toss complete: ${tossWinner === 'team1' ? team1Name : team2Name} won and chose to ${tossDecision}`);
+                                                    }}
+                                                    disabled={!tossWinner || !tossDecision}
+                                                    className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-4 px-6 rounded-xl transition-all">
+                                                    Confirm & Start Match
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div className="text-center py-8">
+                                                <div className="text-6xl mb-4">✅</div>
+                                                <p className="text-xl font-bold text-gray-800">Toss Complete!</p>
+                                                <p className="text-gray-600 mt-2">
+                                                    {tossWinner === 'team1' ? team1Name : team2Name} won and chose to {tossDecision}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
