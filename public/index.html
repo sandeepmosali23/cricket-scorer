@@ -1204,17 +1204,19 @@
                             }
                         }));
 
-                        // CRITICAL: Restore both batsmen to their positions before the wicket
-                        // The dismissed batsman was the striker
-                        setStriker(lastBall.striker);
-                        // Restore the non-striker (who was also batting when wicket fell)
-                        if (lastBall.nonStriker !== null && lastBall.nonStriker !== undefined) {
-                            setNonStriker(lastBall.nonStriker);
-                        }
-
                         console.log(`✅ Wicket undone: ${currentPlayers[lastBall.outPlayer]} restored to batting`);
                     }
                 }
+
+                // CRITICAL: Restore striker and non-striker for ALL balls (wicket or not)
+                // This handles strike rotation caused by odd runs, overs completion, etc.
+                if (lastBall.striker !== null && lastBall.striker !== undefined) {
+                    setStriker(lastBall.striker);
+                }
+                if (lastBall.nonStriker !== null && lastBall.nonStriker !== undefined) {
+                    setNonStriker(lastBall.nonStriker);
+                }
+                console.log(`↩️ Strike restored: Striker=${currentPlayers[lastBall.striker]}, Non-striker=${currentPlayers[lastBall.nonStriker]}`);
 
                 // Restore extras
                 if (lastBall.extra === 'wide') {
