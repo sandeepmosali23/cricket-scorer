@@ -3241,6 +3241,123 @@
                         </div>
                     )}
 
+                    {/* Toss Modal */}
+                    {showTossModal && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+                                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6">
+                                    <h2 className="text-3xl font-bold">🪙 Toss</h2>
+                                    <p className="text-sm opacity-90 mt-1">Time to decide who bats first!</p>
+                                </div>
+
+                                <div className="p-6">
+                                    {!tossComplete ? (
+                                        <>
+                                            <p className="text-gray-700 mb-6 text-lg text-center">
+                                                Which team won the toss?
+                                            </p>
+
+                                            <div className="flex gap-4 mb-6">
+                                                <button
+                                                    onClick={() => {
+                                                        setTossWinner('team1');
+                                                        console.log(`🪙 ${team1Name} won the toss`);
+                                                    }}
+                                                    className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                        tossWinner === 'team1'
+                                                            ? 'bg-green-100 border-green-500 shadow-lg scale-105'
+                                                            : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
+                                                    }`}>
+                                                    <div className="text-2xl mb-2">🏏</div>
+                                                    <div className="font-bold text-lg">{team1Name}</div>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setTossWinner('team2');
+                                                        console.log(`🪙 ${team2Name} won the toss`);
+                                                    }}
+                                                    className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                        tossWinner === 'team2'
+                                                            ? 'bg-blue-100 border-blue-500 shadow-lg scale-105'
+                                                            : 'bg-white border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                                                    }`}>
+                                                    <div className="text-2xl mb-2">🏏</div>
+                                                    <div className="font-bold text-lg">{team2Name}</div>
+                                                </button>
+                                            </div>
+
+                                            {tossWinner && (
+                                                <>
+                                                    <p className="text-gray-700 mb-4 text-lg text-center">
+                                                        {tossWinner === 'team1' ? team1Name : team2Name} elected to:
+                                                    </p>
+
+                                                    <div className="flex gap-4 mb-6">
+                                                        <button
+                                                            onClick={() => setTossDecision('bat')}
+                                                            className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                                tossDecision === 'bat'
+                                                                    ? 'bg-purple-100 border-purple-500 shadow-lg scale-105'
+                                                                    : 'bg-white border-gray-300 hover:border-purple-400 hover:bg-purple-50'
+                                                            }`}>
+                                                            <div className="text-3xl mb-2">🏏</div>
+                                                            <div className="font-bold text-lg">Bat First</div>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => setTossDecision('bowl')}
+                                                            className={`flex-1 p-6 rounded-xl border-3 transition-all ${
+                                                                tossDecision === 'bowl'
+                                                                    ? 'bg-orange-100 border-orange-500 shadow-lg scale-105'
+                                                                    : 'bg-white border-gray-300 hover:border-orange-400 hover:bg-orange-50'
+                                                            }`}>
+                                                            <div className="text-3xl mb-2">⚾</div>
+                                                            <div className="font-bold text-lg">Bowl First</div>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            <button
+                                                onClick={() => {
+                                                    if (!tossWinner || !tossDecision) {
+                                                        alert('⚠️ Please select toss winner and decision');
+                                                        return;
+                                                    }
+
+                                                    // Set batting team based on toss decision
+                                                    if (tossDecision === 'bat') {
+                                                        setBattingTeam(tossWinner);
+                                                    } else {
+                                                        setBattingTeam(tossWinner === 'team1' ? 'team2' : 'team1');
+                                                    }
+
+                                                    setTossComplete(true);
+                                                    setShowTossModal(false);
+                                                    setSetupComplete(true);
+
+                                                    console.log(`✅ Toss complete: ${tossWinner === 'team1' ? team1Name : team2Name} won and chose to ${tossDecision}`);
+                                                }}
+                                                disabled={!tossWinner || !tossDecision}
+                                                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-4 px-6 rounded-xl transition-all">
+                                                Confirm & Start Match
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="text-center py-8">
+                                            <div className="text-6xl mb-4">✅</div>
+                                            <p className="text-xl font-bold text-gray-800">Toss Complete!</p>
+                                            <p className="text-gray-600 mt-2">
+                                                {tossWinner === 'team1' ? team1Name : team2Name} won and chose to {tossDecision}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
                 );
             }
@@ -5945,123 +6062,6 @@
                                             className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl">
                                             ➕ Add Player
                                         </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Toss Modal */}
-                        {showTossModal && (
-                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                                <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-                                    <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6">
-                                        <h2 className="text-3xl font-bold">🪙 Toss</h2>
-                                        <p className="text-sm opacity-90 mt-1">Time to decide who bats first!</p>
-                                    </div>
-
-                                    <div className="p-6">
-                                        {!tossComplete ? (
-                                            <>
-                                                <p className="text-gray-700 mb-6 text-lg text-center">
-                                                    Which team won the toss?
-                                                </p>
-
-                                                <div className="flex gap-4 mb-6">
-                                                    <button
-                                                        onClick={() => {
-                                                            setTossWinner('team1');
-                                                            console.log(`🪙 ${team1Name} won the toss`);
-                                                        }}
-                                                        className={`flex-1 p-6 rounded-xl border-3 transition-all ${
-                                                            tossWinner === 'team1'
-                                                                ? 'bg-green-100 border-green-500 shadow-lg scale-105'
-                                                                : 'bg-white border-gray-300 hover:border-green-400 hover:bg-green-50'
-                                                        }`}>
-                                                        <div className="text-2xl mb-2">🏏</div>
-                                                        <div className="font-bold text-lg">{team1Name}</div>
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => {
-                                                            setTossWinner('team2');
-                                                            console.log(`🪙 ${team2Name} won the toss`);
-                                                        }}
-                                                        className={`flex-1 p-6 rounded-xl border-3 transition-all ${
-                                                            tossWinner === 'team2'
-                                                                ? 'bg-blue-100 border-blue-500 shadow-lg scale-105'
-                                                                : 'bg-white border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                                                        }`}>
-                                                        <div className="text-2xl mb-2">🏏</div>
-                                                        <div className="font-bold text-lg">{team2Name}</div>
-                                                    </button>
-                                                </div>
-
-                                                {tossWinner && (
-                                                    <>
-                                                        <p className="text-gray-700 mb-4 text-lg text-center">
-                                                            {tossWinner === 'team1' ? team1Name : team2Name} elected to:
-                                                        </p>
-
-                                                        <div className="flex gap-4 mb-6">
-                                                            <button
-                                                                onClick={() => setTossDecision('bat')}
-                                                                className={`flex-1 p-6 rounded-xl border-3 transition-all ${
-                                                                    tossDecision === 'bat'
-                                                                        ? 'bg-purple-100 border-purple-500 shadow-lg scale-105'
-                                                                        : 'bg-white border-gray-300 hover:border-purple-400 hover:bg-purple-50'
-                                                                }`}>
-                                                                <div className="text-3xl mb-2">🏏</div>
-                                                                <div className="font-bold text-lg">Bat First</div>
-                                                            </button>
-
-                                                            <button
-                                                                onClick={() => setTossDecision('bowl')}
-                                                                className={`flex-1 p-6 rounded-xl border-3 transition-all ${
-                                                                    tossDecision === 'bowl'
-                                                                        ? 'bg-orange-100 border-orange-500 shadow-lg scale-105'
-                                                                        : 'bg-white border-gray-300 hover:border-orange-400 hover:bg-orange-50'
-                                                                }`}>
-                                                                <div className="text-3xl mb-2">⚾</div>
-                                                                <div className="font-bold text-lg">Bowl First</div>
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-
-                                                <button
-                                                    onClick={() => {
-                                                        if (!tossWinner || !tossDecision) {
-                                                            alert('⚠️ Please select toss winner and decision');
-                                                            return;
-                                                        }
-
-                                                        // Set batting team based on toss decision
-                                                        if (tossDecision === 'bat') {
-                                                            setBattingTeam(tossWinner);
-                                                        } else {
-                                                            setBattingTeam(tossWinner === 'team1' ? 'team2' : 'team1');
-                                                        }
-
-                                                        setTossComplete(true);
-                                                        setShowTossModal(false);
-                                                        setSetupComplete(true);
-
-                                                        console.log(`✅ Toss complete: ${tossWinner === 'team1' ? team1Name : team2Name} won and chose to ${tossDecision}`);
-                                                    }}
-                                                    disabled={!tossWinner || !tossDecision}
-                                                    className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-4 px-6 rounded-xl transition-all">
-                                                    Confirm & Start Match
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <div className="text-6xl mb-4">✅</div>
-                                                <p className="text-xl font-bold text-gray-800">Toss Complete!</p>
-                                                <p className="text-gray-600 mt-2">
-                                                    {tossWinner === 'team1' ? team1Name : team2Name} won and chose to {tossDecision}
-                                                </p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>

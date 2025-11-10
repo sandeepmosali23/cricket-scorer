@@ -8,7 +8,9 @@
       "Bash(chmod:*)",
       "Bash(test:*)",
       "Bash(lsof:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(node -c /Users/sandeepreddy/Downloads/cricket-scorer-dev/public/index.html)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []
