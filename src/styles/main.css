@@ -81,13 +81,35 @@ button:active {
     transform: scale(0.98);
 }
 
+/* Over Component - Horizontal Scroll */
+.over-scroll-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.over-scroll-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.over-scroll-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.over-scroll-container::-webkit-scrollbar-thumb {
+    background: #16a34a;
+    border-radius: 3px;
+}
+
 /* Mobile Optimizations */
 @media (max-width: 640px) {
     .scoring-button {
         min-height: 60px;
         font-size: 1.25rem;
     }
-    
+
     .tab-button {
         min-width: 100px;
     }
