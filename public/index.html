@@ -151,9 +151,21 @@
             const [storageMode, setStorageMode] = useState('local'); // 'local' or 'cloud'
             const [cloudMatches, setCloudMatches] = useState([]);
 
+            // Live scoring state
+            const [liveMatchId, setLiveMatchId] = useState(null);
+            const [isLiveMode, setIsLiveMode] = useState(false);
+            const [isViewerMode, setIsViewerMode] = useState(false);
+            const [showShareModal, setShowShareModal] = useState(false);
+            const [liveUpdateInterval, setLiveUpdateInterval] = useState(null);
+
             // Match Results Viewer state
             const [showMatchResults, setShowMatchResults] = useState(false);
             const [selectedMatchForView, setSelectedMatchForView] = useState(null);
+
+            // Player of the Match state
+            const [playerOfTheMatch, setPlayerOfTheMatch] = useState(null);
+            const [showPotmModal, setShowPotmModal] = useState(false);
+            const [potmReason, setPotmReason] = useState('');
 
             // Player management state
             const [showChangeStriker, setShowChangeStriker] = useState(false);
@@ -1390,6 +1402,7 @@
                     runs: finalRuns,
                     wickets: finalWickets,
                     overs: finalOvers + (finalBalls / 10),
+                    battingTeam: battingTeam, // Store which team batted this innings
                     ballHistory: [...ballHistory],
                     batsmanStats: { ...batsmanStats },
                     bowlerStats: { ...bowlerStats },
@@ -1413,6 +1426,7 @@
                     setStriker(0);
                     setNonStriker(1);
                     setBowler(0);
+                    setLastBowler(null); // Reset last bowler for new innings
                     setBallHistory([]);
                     setCurrentOver([]);
                     setBatsmanStats({});
@@ -1511,7 +1525,11 @@
                     currentPartnership, extras,
 
                     // Innings data
-                    innings1Data, innings2Data
+                    innings1Data, innings2Data,
+
+                    // Player of the Match
+                    playerOfTheMatch,
+                    potmReason
                 };
 
                 try {
@@ -1575,6 +1593,10 @@
                     // Restore innings data
                     setInnings1Data(match.innings1Data);
                     setInnings2Data(match.innings2Data);
+
+                    // Restore Player of the Match
+                    setPlayerOfTheMatch(match.playerOfTheMatch || null);
+                    setPotmReason(match.potmReason || '');
 
                     // Mark setup as complete
                     setSetupComplete(true);
@@ -1649,7 +1671,11 @@
                     currentPartnership, extras,
 
                     // Innings data
-                    innings1Data, innings2Data
+                    innings1Data, innings2Data,
+
+                    // Player of the Match
+                    playerOfTheMatch,
+                    potmReason
                 };
 
                 try {
@@ -1779,12 +1805,211 @@
                 }
             };
 
+            // Live Scoring Functions
+            const generateMatchId = () => {
+                return 'live_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            };
+
+            const startLiveScoring = async () => {
+                if (!firebaseInitialized) {
+                    alert('❌ Firebase not configured. Live scoring requires Firebase setup.');
+                    return;
+                }
+
+                if (!setupComplete) {
+                    alert('⚠️ Please complete match setup first');
+                    return;
+                }
+
+                try {
+                    const matchId = generateMatchId();
+                    setLiveMatchId(matchId);
+                    setIsLiveMode(true);
+
+                    // Save initial match state
+                    await saveLiveMatchState(matchId);
+
+                    setShowShareModal(true);
+                    console.log('✅ Live scoring started:', matchId);
+                } catch (error) {
+                    console.error('Error starting live scoring:', error);
+                    alert('❌ Error starting live scoring: ' + error.message);
+                }
+            };
+
+            const saveLiveMatchState = async (matchId = liveMatchId) => {
+                if (!firebaseInitialized || !matchId) return;
+
+                try {
+                    const matchData = {
+                        id: matchId,
+                        team1Name,
+                        team2Name,
+                        team1Players,
+                        team2Players,
+                        totalOvers,
+                        matchFormat,
+                        battingTeam,
+                        innings,
+                        runs,
+                        wickets,
+                        overs,
+                        balls,
+                        striker,
+                        nonStriker,
+                        bowler,
+                        ballHistory,
+                        target,
+                        matchComplete,
+                        batsmanStats,
+                        bowlerStats,
+                        partnerships,
+                        fallOfWickets,
+                        overRuns,
+                        currentPartnership,
+                        extras,
+                        innings1Data,
+                        innings2Data,
+                        matchStatus,
+                        playerOfTheMatch,
+                        potmReason,
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+                        isLive: !matchComplete
+                    };
+
+                    await db.collection('liveMatches').doc(matchId).set(matchData);
+                    console.log('✅ Live match state saved');
+                } catch (error) {
+                    console.error('Error saving live match state:', error);
+                }
+            };
+
+            const loadLiveMatch = async (matchId) => {
+                if (!firebaseInitialized) {
+                    alert('❌ Firebase not configured');
+                    return;
+                }
+
+                try {
+                    const doc = await db.collection('liveMatches').doc(matchId).get();
+
+                    if (!doc.exists) {
+                        alert('❌ Live match not found');
+                        return;
+                    }
+
+                    const match = doc.data();
+
+                    // Set viewer mode
+                    setIsViewerMode(true);
+                    setLiveMatchId(matchId);
+
+                    // Load all match data
+                    setTeam1Name(match.team1Name);
+                    setTeam2Name(match.team2Name);
+                    setTeam1Players(match.team1Players);
+                    setTeam2Players(match.team2Players);
+                    setTotalOvers(match.totalOvers);
+                    setMatchFormat(match.matchFormat);
+                    setBattingTeam(match.battingTeam);
+                    setInnings(match.innings);
+                    setRuns(match.runs);
+                    setWickets(match.wickets);
+                    setOvers(match.overs);
+                    setBalls(match.balls);
+                    setStriker(match.striker);
+                    setNonStriker(match.nonStriker);
+                    setBowler(match.bowler);
+                    setBallHistory(match.ballHistory);
+                    setTarget(match.target);
+                    setMatchComplete(match.matchComplete);
+                    setBatsmanStats(match.batsmanStats);
+                    setBowlerStats(match.bowlerStats);
+                    setPartnerships(match.partnerships);
+                    setFallOfWickets(match.fallOfWickets);
+                    setOverRuns(match.overRuns);
+                    setCurrentPartnership(match.currentPartnership);
+                    setExtras(match.extras);
+                    setInnings1Data(match.innings1Data);
+                    setInnings2Data(match.innings2Data);
+                    setMatchStatus(match.matchStatus);
+                    setSetupComplete(true);
+
+                    // Set up real-time listener
+                    const unsubscribe = db.collection('liveMatches').doc(matchId).onSnapshot(doc => {
+                        if (doc.exists) {
+                            const updatedMatch = doc.data();
+                            // Update all state with latest data
+                            setRuns(updatedMatch.runs);
+                            setWickets(updatedMatch.wickets);
+                            setOvers(updatedMatch.overs);
+                            setBalls(updatedMatch.balls);
+                            setStriker(updatedMatch.striker);
+                            setNonStriker(updatedMatch.nonStriker);
+                            setBowler(updatedMatch.bowler);
+                            setBallHistory(updatedMatch.ballHistory);
+                            setMatchComplete(updatedMatch.matchComplete);
+                            setBatsmanStats(updatedMatch.batsmanStats);
+                            setBowlerStats(updatedMatch.bowlerStats);
+                            setPartnerships(updatedMatch.partnerships);
+                            setFallOfWickets(updatedMatch.fallOfWickets);
+                            setOverRuns(updatedMatch.overRuns);
+                            setCurrentPartnership(updatedMatch.currentPartnership);
+                            setExtras(updatedMatch.extras);
+                            setInnings1Data(updatedMatch.innings1Data);
+                            setInnings2Data(updatedMatch.innings2Data);
+                            setMatchStatus(updatedMatch.matchStatus);
+                            console.log('🔄 Live match updated');
+                        }
+                    });
+
+                    console.log('✅ Live match loaded and listening for updates');
+                } catch (error) {
+                    console.error('Error loading live match:', error);
+                    alert('❌ Error loading live match: ' + error.message);
+                }
+            };
+
+            const stopLiveScoring = async () => {
+                if (!liveMatchId) return;
+
+                try {
+                    // Mark match as not live
+                    await db.collection('liveMatches').doc(liveMatchId).update({
+                        isLive: false,
+                        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    setIsLiveMode(false);
+                    setLiveMatchId(null);
+                    alert('✅ Live scoring stopped');
+                } catch (error) {
+                    console.error('Error stopping live scoring:', error);
+                }
+            };
+
             // Load cloud matches on component mount
             useEffect(() => {
                 if (firebaseInitialized && storageMode === 'cloud') {
                     fetchCloudMatches();
                 }
             }, [storageMode]);
+
+            // Auto-save live match state when scoring
+            useEffect(() => {
+                if (isLiveMode && liveMatchId && setupComplete) {
+                    saveLiveMatchState(liveMatchId);
+                }
+            }, [runs, wickets, overs, balls, ballHistory, matchComplete]);
+
+            // Check URL for live match ID on load
+            useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const matchId = urlParams.get('live');
+                if (matchId) {
+                    loadLiveMatch(matchId);
+                }
+            }, []);
 
             // Match Results Viewer Functions
             const viewMatchDetails = async (matchId) => {
@@ -3958,6 +4183,313 @@
                 );
             };
 
+            // Share Live Score Modal Component
+            const ShareLiveScoreModal = () => {
+                const liveUrl = `${window.location.origin}${window.location.pathname}?live=${liveMatchId}`;
+                const [copied, setCopied] = useState(false);
+
+                const copyToClipboard = () => {
+                    navigator.clipboard.writeText(liveUrl).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 3000);
+                    });
+                };
+
+                const shareViaWhatsApp = () => {
+                    const text = `🏏 Watch ${team1Name} vs ${team2Name} live!\n${liveUrl}`;
+                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                };
+
+                const shareViaTwitter = () => {
+                    const text = `🏏 Watch ${team1Name} vs ${team2Name} live!`;
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(liveUrl)}`, '_blank');
+                };
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+                            <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-6 rounded-t-2xl">
+                                <h2 className="text-2xl font-bold text-center">📡 Live Scoring Active!</h2>
+                                <p className="text-center mt-2 text-sm opacity-90">Share this link to let others watch live</p>
+                            </div>
+
+                            <div className="p-6">
+                                <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                                    <div className="flex items-start">
+                                        <div className="flex-shrink-0">
+                                            <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="ml-3">
+                                            <p className="text-sm text-green-700 font-semibold">
+                                                Your match is now broadcasting live! All updates will be visible to viewers in real-time.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Share this URL:</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={liveUrl}
+                                            readOnly
+                                            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                                        />
+                                        <button
+                                            onClick={copyToClipboard}
+                                            className={`px-6 py-3 rounded-lg font-bold transition-colors ${
+                                                copied
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                            }`}
+                                        >
+                                            {copied ? '✓ Copied!' : 'Copy'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-3">Or share via:</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={shareViaWhatsApp}
+                                            className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg transition-colors"
+                                        >
+                                            <span>📱</span> WhatsApp
+                                        </button>
+                                        <button
+                                            onClick={shareViaTwitter}
+                                            className="flex items-center justify-center gap-2 bg-blue-400 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors"
+                                        >
+                                            <span>🐦</span> Twitter
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                    <div className="flex">
+                                        <div className="flex-shrink-0">
+                                            <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="ml-3">
+                                            <p className="text-sm text-yellow-700">
+                                                <strong>Note:</strong> Keep this page open to continue broadcasting. Live scoring will stop if you close this page or stop the broadcast.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 border-t bg-gray-50 rounded-b-2xl flex gap-3">
+                                <button
+                                    onClick={() => setShowShareModal(false)}
+                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Are you sure you want to stop live scoring?')) {
+                                            stopLiveScoring();
+                                            setShowShareModal(false);
+                                        }
+                                    }}
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition-colors"
+                                >
+                                    Stop Broadcasting
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // Player of the Match Modal Component
+            const PlayerOfTheMatchModal = () => {
+                const [selectedPlayer, setSelectedPlayer] = useState(playerOfTheMatch);
+                const [reason, setReason] = useState(potmReason);
+                const [selectedTeam, setSelectedTeam] = useState('team1');
+
+                const allPlayers = selectedTeam === 'team1'
+                    ? team1Players.map((name, idx) => ({ name, team: team1Name, teamKey: 'team1', index: idx }))
+                    : team2Players.map((name, idx) => ({ name, team: team2Name, teamKey: 'team2', index: idx }));
+
+                const handleConfirm = () => {
+                    if (!selectedPlayer) {
+                        alert('Please select a player');
+                        return;
+                    }
+                    setPlayerOfTheMatch(selectedPlayer);
+                    setPotmReason(reason);
+                    setShowPotmModal(false);
+                };
+
+                return (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-6 rounded-t-2xl">
+                                <h2 className="text-3xl font-bold text-center flex items-center justify-center gap-3">
+                                    <span>🏆</span>
+                                    <span>Player of the Match</span>
+                                    <span>🏆</span>
+                                </h2>
+                                <p className="text-center mt-2 text-sm opacity-90">Select the best performer of the match</p>
+                            </div>
+
+                            <div className="p-6">
+                                {/* Team Selector */}
+                                <div className="flex gap-2 mb-4">
+                                    <button
+                                        onClick={() => setSelectedTeam('team1')}
+                                        className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all ${
+                                            selectedTeam === 'team1'
+                                                ? 'bg-green-600 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        {team1Name}
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedTeam('team2')}
+                                        className={`flex-1 py-3 px-4 rounded-lg font-bold transition-all ${
+                                            selectedTeam === 'team2'
+                                                ? 'bg-blue-600 text-white shadow-lg'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        {team2Name}
+                                    </button>
+                                </div>
+
+                                {/* Player Selection */}
+                                <div className="space-y-2 mb-6 max-h-96 overflow-y-auto">
+                                    {allPlayers.map((player, idx) => {
+                                        if (!player.name.trim()) return null;
+
+                                        // Determine which team batted first (fallback logic)
+                                        const team1BattedFirst = innings1Data?.battingTeam === 'team1' ||
+                                                                 (innings1Data && !innings1Data.battingTeam && battingTeam === 'team2');
+                                        const innings1BattingTeam = innings1Data?.battingTeam || (team1BattedFirst ? 'team1' : 'team2');
+                                        const innings2BattingTeam = innings2Data?.battingTeam || (team1BattedFirst ? 'team2' : 'team1');
+
+                                        // Get batting stats from both innings
+                                        let battingStats = null;
+
+                                        // Check innings 1 data
+                                        if (innings1Data && innings1BattingTeam === player.teamKey) {
+                                            battingStats = innings1Data.batsmanStats?.[player.index];
+                                        }
+                                        // Check innings 2 data
+                                        if (innings2Data && innings2BattingTeam === player.teamKey) {
+                                            battingStats = innings2Data.batsmanStats?.[player.index];
+                                        }
+                                        // Check current innings
+                                        if (battingTeam === player.teamKey) {
+                                            battingStats = batsmanStats[player.index];
+                                        }
+
+                                        // Get bowling stats from both innings
+                                        let bowlingStats = null;
+
+                                        // Check innings 1 data (player bowled when opposite team batted)
+                                        if (innings1Data && innings1BattingTeam !== player.teamKey) {
+                                            bowlingStats = innings1Data.bowlerStats?.[player.index];
+                                        }
+                                        // Check innings 2 data
+                                        if (innings2Data && innings2BattingTeam !== player.teamKey) {
+                                            bowlingStats = innings2Data.bowlerStats?.[player.index];
+                                        }
+                                        // Check current innings
+                                        if (battingTeam !== player.teamKey) {
+                                            bowlingStats = bowlerStats[player.index];
+                                        }
+
+                                        // Don't show players with no stats
+                                        if (!battingStats && !bowlingStats) return null;
+
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setSelectedPlayer({ ...player })}
+                                                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
+                                                    selectedPlayer?.name === player.name && selectedPlayer?.teamKey === player.teamKey
+                                                        ? 'bg-yellow-50 border-yellow-500 shadow-lg'
+                                                        : 'bg-white border-gray-200 hover:border-yellow-300 hover:shadow'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex-1">
+                                                        <div className="font-bold text-lg text-gray-800">{player.name}</div>
+                                                        <div className="text-sm text-gray-600 mt-1">
+                                                            {battingStats && (
+                                                                <div>
+                                                                    🏏 Batting: {battingStats.runs} ({battingStats.balls})
+                                                                    {battingStats.fours > 0 && ` • ${battingStats.fours}×4`}
+                                                                    {battingStats.sixes > 0 && ` • ${battingStats.sixes}×6`}
+                                                                    {battingStats.strikeRate > 0 && ` • SR: ${battingStats.strikeRate}`}
+                                                                </div>
+                                                            )}
+                                                            {bowlingStats && (
+                                                                <div className={battingStats ? 'mt-1' : ''}>
+                                                                    🎯 Bowling: {bowlingStats.overs}.{bowlingStats.balls}-{bowlingStats.runs}-{bowlingStats.wickets}
+                                                                    {bowlingStats.economy > 0 && ` • Econ: ${bowlingStats.economy}`}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {selectedPlayer?.name === player.name && selectedPlayer?.teamKey === player.teamKey && (
+                                                        <div className="text-yellow-500 text-2xl">
+                                                            ✓
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Reason Input */}
+                                {selectedPlayer && (
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Award Reason (Optional)
+                                        </label>
+                                        <textarea
+                                            value={reason}
+                                            onChange={(e) => setReason(e.target.value)}
+                                            placeholder="e.g., Match-winning innings, Brilliant bowling spell, All-round performance..."
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500"
+                                            rows="3"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6 border-t bg-gray-50 rounded-b-2xl flex gap-3">
+                                <button
+                                    onClick={() => setShowPotmModal(false)}
+                                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirm}
+                                    disabled={!selectedPlayer}
+                                    className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3 rounded-lg transition-colors shadow-lg disabled:cursor-not-allowed"
+                                >
+                                    {selectedPlayer ? `Award to ${selectedPlayer.name}` : 'Select a Player'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
             // Bowler Change Modal Component
             const BowlerChangeModal = () => {
                 const [selectedBowlerIndex, setSelectedBowlerIndex] = useState(null);
@@ -4084,6 +4616,8 @@
                     {showReturnModal && <ReturnRetiredModal />}
                     {showSelectNewBatsman && <SelectNewBatsmanModal />}
                     {showBowlerChangeModal && <BowlerChangeModal />}
+                    {showShareModal && <ShareLiveScoreModal />}
+                    {showPotmModal && <PlayerOfTheMatchModal />}
 
                     {/* Over Complete Notification */}
                     {showOverComplete && (
@@ -4097,21 +4631,82 @@
 
                     <div className="max-w-7xl mx-auto">
                         <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-2xl shadow-xl p-6 mb-6">
-                            <h1 className="text-3xl font-bold text-center mb-2">{team1Name} vs {team2Name}</h1>
-                            <div className="flex justify-center items-center gap-4 text-sm">
-                                <span className="font-semibold">{matchFormat}</span>
-                                <span>•</span>
-                                <span>{totalOvers} Overs</span>
-                                <span>•</span>
-                                <span>{innings === 1 ? '1st Innings' : '2nd Innings'}</span>
-                                {target && <><span>•</span><span>Target: {target}</span></>}
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                    <h1 className="text-3xl font-bold text-center mb-2">{team1Name} vs {team2Name}</h1>
+                                    <div className="flex justify-center items-center gap-4 text-sm flex-wrap">
+                                        <span className="font-semibold">{matchFormat}</span>
+                                        <span>•</span>
+                                        <span>{totalOvers} Overs</span>
+                                        <span>•</span>
+                                        <span>{innings === 1 ? '1st Innings' : '2nd Innings'}</span>
+                                        {target && <><span>•</span><span>Target: {target}</span></>}
+                                        {isLiveMode && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="bg-red-500 text-white px-3 py-1 rounded-full font-bold animate-pulse flex items-center gap-1">
+                                                    <span className="inline-block w-2 h-2 bg-white rounded-full"></span>
+                                                    LIVE
+                                                </span>
+                                            </>
+                                        )}
+                                        {isViewerMode && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="bg-blue-500 text-white px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                                                    <span>👁️</span> VIEWER MODE
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                {!isViewerMode && setupComplete && !matchComplete && (
+                                    <button
+                                        onClick={() => isLiveMode ? setShowShareModal(true) : startLiveScoring()}
+                                        className={`${
+                                            isLiveMode
+                                                ? 'bg-red-500 hover:bg-red-600 animate-pulse'
+                                                : 'bg-white text-green-600 hover:bg-gray-100'
+                                        } px-4 py-2 rounded-lg font-bold transition-colors shadow-lg flex items-center gap-2 text-sm whitespace-nowrap`}
+                                    >
+                                        <span>{isLiveMode ? '📡' : '📱'}</span>
+                                        {isLiveMode ? 'Broadcasting Live' : 'Start Live Scoring'}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
                         {matchComplete && (
-                            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-2xl shadow-xl p-8 mb-6 text-center animate-pulse">
+                            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-2xl shadow-xl p-8 mb-6 text-center">
                                 <h2 className="text-4xl font-bold mb-4">🏆 Match Complete! 🏆</h2>
-                                <p className="text-3xl font-semibold">{getMatchResult()}</p>
+                                <p className="text-3xl font-semibold mb-6">{getMatchResult()}</p>
+
+                                {/* Player of the Match Display/Button */}
+                                {playerOfTheMatch ? (
+                                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-6 mb-4">
+                                        <div className="text-xl font-bold mb-2">⭐ Player of the Match ⭐</div>
+                                        <div className="text-2xl font-bold">{playerOfTheMatch.name}</div>
+                                        <div className="text-sm opacity-90">({playerOfTheMatch.team})</div>
+                                        {potmReason && (
+                                            <div className="text-sm mt-2 italic opacity-90">"{potmReason}"</div>
+                                        )}
+                                        {!isViewerMode && (
+                                            <button
+                                                onClick={() => setShowPotmModal(true)}
+                                                className="mt-4 bg-white/30 hover:bg-white/40 px-4 py-2 rounded-lg font-semibold transition-colors"
+                                            >
+                                                Change Selection
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : !isViewerMode && (
+                                    <button
+                                        onClick={() => setShowPotmModal(true)}
+                                        className="bg-white text-orange-600 hover:bg-gray-100 px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:scale-105"
+                                    >
+                                        🏆 Select Player of the Match
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -4154,12 +4749,14 @@
                                             <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <div className="text-xs text-gray-600">★ Striker</div>
-                                                    <div className="flex gap-1">
-                                                        <button onClick={() => setShowChangeStriker(true)} disabled={matchComplete} className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print" title="Change striker">
-                                                            🔄
-                                                        </button>
-                                                        <button onClick={() => retireBatsman('striker')} disabled={matchComplete} className="text-xs bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print">Retire</button>
-                                                    </div>
+                                                    {!isViewerMode && (
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => setShowChangeStriker(true)} disabled={matchComplete} className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print" title="Change striker">
+                                                                🔄
+                                                            </button>
+                                                            <button onClick={() => retireBatsman('striker')} disabled={matchComplete} className="text-xs bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print">Retire</button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="font-bold text-lg">{currentPlayers[striker] || 'Not Set'}</div>
                                                 <div className="text-sm text-gray-600 mt-1">
@@ -4170,12 +4767,14 @@
                                             <div className="bg-gray-50 p-4 rounded-lg">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <div className="text-xs text-gray-600">Non-Striker</div>
-                                                    <div className="flex gap-1">
-                                                        <button onClick={() => setShowChangeNonStriker(true)} disabled={matchComplete} className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print" title="Change non-striker">
-                                                            🔄
-                                                        </button>
-                                                        <button onClick={() => retireBatsman('nonStriker')} disabled={matchComplete} className="text-xs bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print">Retire</button>
-                                                    </div>
+                                                    {!isViewerMode && (
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => setShowChangeNonStriker(true)} disabled={matchComplete} className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print" title="Change non-striker">
+                                                                🔄
+                                                            </button>
+                                                            <button onClick={() => retireBatsman('nonStriker')} disabled={matchComplete} className="text-xs bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-2 py-1 rounded no-print">Retire</button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="font-bold text-lg">{currentPlayers[nonStriker] || 'Not Set'}</div>
                                                 <div className="text-sm text-gray-600 mt-1">
@@ -4186,14 +4785,16 @@
                                         </div>
 
                                         {/* Swap Strike Button */}
-                                        <div className="mb-4">
-                                            <button
-                                                onClick={swapStrike}
-                                                disabled={matchComplete}
-                                                className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all hover:scale-105 no-print">
-                                                ⇄ Swap Strike
-                                            </button>
-                                        </div>
+                                        {!isViewerMode && (
+                                            <div className="mb-4">
+                                                <button
+                                                    onClick={swapStrike}
+                                                    disabled={matchComplete}
+                                                    className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all hover:scale-105 no-print">
+                                                    ⇄ Swap Strike
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {retiredBatsmen.length > 0 && (
                                             <div className="bg-orange-50 p-3 rounded-lg mb-4 border border-orange-200">
@@ -4233,13 +4834,15 @@
                                         <div className="mb-4">
                                             <div className="flex justify-between items-center mb-2">
                                                 <label className="text-sm font-semibold text-gray-700">Current Bowler</label>
-                                                <button
-                                                    onClick={() => setShowChangeBowler(true)}
-                                                    disabled={matchComplete}
-                                                    className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-3 py-1 rounded no-print"
-                                                    title="Change bowler">
-                                                    🔄 Change
-                                                </button>
+                                                {!isViewerMode && (
+                                                    <button
+                                                        onClick={() => setShowChangeBowler(true)}
+                                                        disabled={matchComplete}
+                                                        className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-3 py-1 rounded no-print"
+                                                        title="Change bowler">
+                                                        🔄 Change
+                                                    </button>
+                                                )}
                                             </div>
 
                                             {/* Warning if same bowler as last over */}
@@ -4266,7 +4869,7 @@
                                                         ? 'border-red-500 bg-red-50 focus:border-red-600'
                                                         : 'border-gray-300 focus:border-green-500'
                                                 }`}
-                                                disabled={matchComplete}>
+                                                disabled={matchComplete || isViewerMode}>
                                                 {bowlingPlayers.map((player, index) =>
                                                     player.trim() && (
                                                         <option key={index} value={index}>
@@ -4279,20 +4882,22 @@
                                         </div>
 
                                         {/* Add Player Button */}
-                                        <div className="mb-4">
-                                            <button
-                                                onClick={() => {
-                                                    setAddingToBattingTeam(true);
-                                                    setShowAddPlayer(true);
-                                                }}
-                                                disabled={matchComplete}
-                                                className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all hover:scale-105 no-print">
-                                                ➕ Add Player
-                                            </button>
-                                        </div>
+                                        {!isViewerMode && (
+                                            <div className="mb-4">
+                                                <button
+                                                    onClick={() => {
+                                                        setAddingToBattingTeam(true);
+                                                        setShowAddPlayer(true);
+                                                    }}
+                                                    disabled={matchComplete}
+                                                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 disabled:from-gray-300 disabled:to-gray-400 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition-all hover:scale-105 no-print">
+                                                    ➕ Add Player
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {!matchComplete && (
+                                    {!matchComplete && !isViewerMode && (
                                         <div className="space-y-4 no-print">
                                             <div className="grid grid-cols-4 gap-3">
                                                 <button onClick={() => addBall(0)} className="bg-gray-200 hover:bg-gray-300 py-6 rounded-xl font-bold text-2xl transition-all shadow-md hover:shadow-lg">0</button>
@@ -5154,6 +5759,151 @@
                                 <div>
                                     <h2 className="text-2xl font-bold mb-6 text-gray-800">📈 Advanced Analytics</h2>
 
+                                    {/* Manhattan Chart - Over-by-Over Runs */}
+                                    <div className="mb-6 bg-white p-6 rounded-xl border-2 border-gray-200 shadow-lg">
+                                        <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+                                            <span>📊</span>
+                                            <span>Manhattan Chart - Runs Per Over</span>
+                                        </h3>
+                                        {overRuns.length > 0 ? (
+                                            <div>
+                                                <div className="flex items-end justify-start gap-1 h-64 border-l-2 border-b-2 border-gray-300 pl-4 pb-4">
+                                                    {overRuns.map((runs, index) => {
+                                                        const maxRuns = Math.max(...overRuns, 20);
+                                                        const heightPercent = (runs / maxRuns) * 100;
+                                                        const isHighScoring = runs >= 15;
+                                                        const isMediumScoring = runs >= 10 && runs < 15;
+
+                                                        return (
+                                                            <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                                                                <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                                                                    Over {index + 1}: {runs} runs
+                                                                </div>
+                                                                <div
+                                                                    className={`w-full rounded-t transition-all hover:opacity-80 ${
+                                                                        isHighScoring ? 'bg-gradient-to-t from-red-500 to-red-400' :
+                                                                        isMediumScoring ? 'bg-gradient-to-t from-yellow-500 to-yellow-400' :
+                                                                        'bg-gradient-to-t from-blue-500 to-blue-400'
+                                                                    }`}
+                                                                    style={{ height: `${heightPercent}%` }}
+                                                                >
+                                                                </div>
+                                                                <div className="text-xs font-semibold mt-2 text-gray-700">{runs}</div>
+                                                                <div className="text-xs text-gray-500">{index + 1}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="text-center text-sm text-gray-600 mt-4">
+                                                    <span className="inline-block w-3 h-3 bg-blue-500 rounded mr-1"></span> 0-9 runs
+                                                    <span className="inline-block w-3 h-3 bg-yellow-500 rounded ml-3 mr-1"></span> 10-14 runs
+                                                    <span className="inline-block w-3 h-3 bg-red-500 rounded ml-3 mr-1"></span> 15+ runs
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-8">
+                                                No overs completed yet. Start scoring to see the Manhattan chart!
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Wagonwheel - Run Scoring Zones */}
+                                    <div className="mb-6 bg-white p-6 rounded-xl border-2 border-gray-200 shadow-lg">
+                                        <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+                                            <span>🎯</span>
+                                            <span>Wagonwheel - Run Distribution</span>
+                                        </h3>
+                                        {ballHistory.length > 0 ? (
+                                            <div className="flex flex-col items-center">
+                                                <div className="relative w-80 h-80">
+                                                    {/* Cricket field circle */}
+                                                    <svg viewBox="0 0 400 400" className="w-full h-full">
+                                                        {/* Outer boundary circle */}
+                                                        <circle cx="200" cy="200" r="190" fill="#90EE90" stroke="#2d7a2d" strokeWidth="3" />
+
+                                                        {/* Inner circle (30-yard circle) */}
+                                                        <circle cx="200" cy="200" r="120" fill="#7ec87e" stroke="#2d7a2d" strokeWidth="2" strokeDasharray="5,5" opacity="0.5" />
+
+                                                        {/* Pitch */}
+                                                        <rect x="185" y="140" width="30" height="120" fill="#c4a57b" stroke="#8b7355" strokeWidth="2" />
+
+                                                        {/* Field lines - 8 directions */}
+                                                        {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => {
+                                                            const rad = (angle - 90) * Math.PI / 180;
+                                                            const x2 = 200 + Math.cos(rad) * 190;
+                                                            const y2 = 200 + Math.sin(rad) * 190;
+                                                            return (
+                                                                <line
+                                                                    key={i}
+                                                                    x1="200"
+                                                                    y1="200"
+                                                                    x2={x2}
+                                                                    y2={y2}
+                                                                    stroke="#ccc"
+                                                                    strokeWidth="1"
+                                                                    strokeDasharray="3,3"
+                                                                    opacity="0.5"
+                                                                />
+                                                            );
+                                                        })}
+
+                                                        {/* Plot runs on wagonwheel */}
+                                                        {ballHistory.map((ball, index) => {
+                                                            if (ball.runs === 0 || ball.wicket || ball.extra) return null;
+
+                                                            // Simplified zone calculation (random for now - in real app you'd track shot direction)
+                                                            const angle = ((index * 37) % 360) * Math.PI / 180; // Pseudo-random angle based on index
+                                                            const distance = ball.runs === 6 ? 180 : ball.runs === 4 ? 150 : 80;
+                                                            const x = 200 + Math.cos(angle) * distance;
+                                                            const y = 200 + Math.sin(angle) * distance;
+
+                                                            return (
+                                                                <g key={index}>
+                                                                    <line
+                                                                        x1="200"
+                                                                        y1="200"
+                                                                        x2={x}
+                                                                        y2={y}
+                                                                        stroke={ball.runs === 6 ? '#9333ea' : ball.runs === 4 ? '#3b82f6' : '#10b981'}
+                                                                        strokeWidth={ball.runs >= 4 ? '3' : '2'}
+                                                                        opacity="0.6"
+                                                                    />
+                                                                    <circle
+                                                                        cx={x}
+                                                                        cy={y}
+                                                                        r={ball.runs >= 4 ? '5' : '3'}
+                                                                        fill={ball.runs === 6 ? '#9333ea' : ball.runs === 4 ? '#3b82f6' : '#10b981'}
+                                                                    />
+                                                                </g>
+                                                            );
+                                                        })}
+
+                                                        {/* Batsman position */}
+                                                        <circle cx="200" cy="200" r="8" fill="#ef4444" stroke="white" strokeWidth="2" />
+
+                                                        {/* Field position labels */}
+                                                        <text x="200" y="30" textAnchor="middle" fontSize="12" fill="#2d7a2d" fontWeight="bold">Long Off</text>
+                                                        <text x="200" y="380" textAnchor="middle" fontSize="12" fill="#2d7a2d" fontWeight="bold">Long On</text>
+                                                        <text x="20" y="205" textAnchor="middle" fontSize="12" fill="#2d7a2d" fontWeight="bold">Square Leg</text>
+                                                        <text x="380" y="205" textAnchor="middle" fontSize="12" fill="#2d7a2d" fontWeight="bold">Cover</text>
+                                                    </svg>
+                                                </div>
+                                                <div className="text-center text-sm text-gray-600 mt-4">
+                                                    <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span> 1-3 runs
+                                                    <span className="inline-block w-3 h-3 bg-blue-500 rounded-full ml-3 mr-1"></span> 4 runs
+                                                    <span className="inline-block w-3 h-3 bg-purple-600 rounded-full ml-3 mr-1"></span> 6 runs
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-2 italic">
+                                                    * Simplified visualization - actual shot directions not tracked
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-8">
+                                                No scoring shots yet. Start scoring to see the wagonwheel!
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Match-wide Top Performers */}
                                     <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-200">
                                         <h3 className="text-xl font-bold mb-4 text-indigo-900">🏆 Top Performers (Both Innings)</h3>
@@ -5545,7 +6295,8 @@
                         )}
 
                         {/* Save/Load Floating Buttons - Minimal & Mobile-Friendly */}
-                        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-row gap-2 no-print z-40 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-xl">
+                        {!isViewerMode && (
+                            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 flex flex-row gap-2 no-print z-40 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-xl">
                             {/* Storage Mode Indicator */}
                             <button
                                 onClick={() => {
@@ -5617,6 +6368,7 @@
                                 </>
                             )}
                         </div>
+                        )}
 
                         {/* Match History Modal */}
                         {showMatchHistory && (
