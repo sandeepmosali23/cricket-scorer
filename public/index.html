@@ -139,7 +139,16 @@
             const [partnerships, setPartnerships] = useState([]);
             const [fallOfWickets, setFallOfWickets] = useState([]);
             const [overRuns, setOverRuns] = useState([]);
-            const [currentPartnership, setCurrentPartnership] = useState({ runs: 0, balls: 0, batsman1: 0, batsman2: 1 });
+            const [currentPartnership, setCurrentPartnership] = useState({
+                runs: 0,
+                balls: 0,
+                batsman1: 0,
+                batsman2: 1,
+                batsman1Runs: 0,
+                batsman2Runs: 0,
+                batsman1Balls: 0,
+                batsman2Balls: 0
+            });
             const [extras, setExtras] = useState({ wides: 0, noBalls: 0, byes: 0, legByes: 0 });
 
             // Innings data
@@ -998,10 +1007,10 @@
             const selectNewBatsman = (batsmanIndex) => {
                 if (outBatsmanPosition === 'striker') {
                     setStriker(batsmanIndex);
-                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: batsmanIndex, batsman2: nonStriker });
+                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: batsmanIndex, batsman2: nonStriker, batsman1Runs: 0, batsman2Runs: 0, batsman1Balls: 0, batsman2Balls: 0 });
                 } else if (outBatsmanPosition === 'nonStriker') {
                     setNonStriker(batsmanIndex);
-                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: striker, batsman2: batsmanIndex });
+                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: striker, batsman2: batsmanIndex, batsman1Runs: 0, batsman2Runs: 0, batsman1Balls: 0, batsman2Balls: 0 });
                 }
                 setShowSelectNewBatsman(false);
                 setOutBatsmanPosition(null);
@@ -1052,7 +1061,12 @@
                         setCurrentPartnership(prev => ({
                             ...prev,
                             runs: prev.runs + extraRuns,
-                            balls: prev.balls // No-ball doesn't count as ball faced
+                            balls: prev.balls, // No-ball doesn't count as ball faced
+                            // Track runs for no-ball
+                            batsman1Runs: striker === prev.batsman1 ? prev.batsman1Runs + extraRuns : prev.batsman1Runs,
+                            batsman2Runs: striker === prev.batsman2 ? prev.batsman2Runs + extraRuns : prev.batsman2Runs,
+                            batsman1Balls: prev.batsman1Balls, // No balls faced
+                            batsman2Balls: prev.batsman2Balls
                         }));
                     }
 
@@ -1075,7 +1089,10 @@
                     setCurrentPartnership(prev => ({
                         ...prev,
                         runs: prev.runs + extraRuns,
-                        balls: prev.balls + 1
+                        balls: prev.balls + 1,
+                        // Track balls faced for byes
+                        batsman1Balls: striker === prev.batsman1 ? prev.batsman1Balls + 1 : prev.batsman1Balls,
+                        batsman2Balls: striker === prev.batsman2 ? prev.batsman2Balls + 1 : prev.batsman2Balls
                     }));
 
                     // Swap strike on odd runs
@@ -1096,7 +1113,10 @@
                     setCurrentPartnership(prev => ({
                         ...prev,
                         runs: prev.runs + extraRuns,
-                        balls: prev.balls + 1
+                        balls: prev.balls + 1,
+                        // Track balls faced for leg byes
+                        batsman1Balls: striker === prev.batsman1 ? prev.batsman1Balls + 1 : prev.batsman1Balls,
+                        batsman2Balls: striker === prev.batsman2 ? prev.batsman2Balls + 1 : prev.batsman2Balls
                     }));
 
                     // Swap strike on odd runs
@@ -1115,7 +1135,12 @@
                     setCurrentPartnership(prev => ({
                         ...prev,
                         runs: prev.runs + runsScored,
-                        balls: prev.balls + 1
+                        balls: prev.balls + 1,
+                        // Track individual contributions
+                        batsman1Runs: striker === prev.batsman1 ? prev.batsman1Runs + runsScored : prev.batsman1Runs,
+                        batsman2Runs: striker === prev.batsman2 ? prev.batsman2Runs + runsScored : prev.batsman2Runs,
+                        batsman1Balls: striker === prev.batsman1 ? prev.batsman1Balls + 1 : prev.batsman1Balls,
+                        batsman2Balls: striker === prev.batsman2 ? prev.batsman2Balls + 1 : prev.batsman2Balls
                     }));
 
                     if (runsScored % 2 !== 0) {
@@ -1383,12 +1408,21 @@
                 });
 
                 // Restore current partnership
-                setCurrentPartnership(prev => ({
-                    batsman1: prev.batsman1,
-                    batsman2: prev.batsman2,
-                    runs: Math.max(0, prev.runs - lastBall.totalRuns),
-                    balls: Math.max(0, prev.balls - (lastBall.extra !== 'wide' && lastBall.extra !== 'noball' ? 1 : 0))
-                }));
+                setCurrentPartnership(prev => {
+                    const runsToDeduct = lastBall.extra === 'bye' || lastBall.extra === 'legbye' ? 0 : (lastBall.extra === 'noball' && lastBall.extraRuns > 0 ? lastBall.extraRuns : lastBall.runs);
+                    const ballsToDeduct = lastBall.extra !== 'wide' && lastBall.extra !== 'noball' ? 1 : 0;
+
+                    return {
+                        batsman1: prev.batsman1,
+                        batsman2: prev.batsman2,
+                        runs: Math.max(0, prev.runs - lastBall.totalRuns),
+                        balls: Math.max(0, prev.balls - ballsToDeduct),
+                        batsman1Runs: lastBall.striker === prev.batsman1 ? Math.max(0, prev.batsman1Runs - runsToDeduct) : prev.batsman1Runs,
+                        batsman2Runs: lastBall.striker === prev.batsman2 ? Math.max(0, prev.batsman2Runs - runsToDeduct) : prev.batsman2Runs,
+                        batsman1Balls: lastBall.striker === prev.batsman1 ? Math.max(0, prev.batsman1Balls - ballsToDeduct) : prev.batsman1Balls,
+                        batsman2Balls: lastBall.striker === prev.batsman2 ? Math.max(0, prev.batsman2Balls - ballsToDeduct) : prev.batsman2Balls
+                    };
+                });
 
                 // Remove from ball history and current over
                 setBallHistory(prev => prev.slice(0, -1));
@@ -1434,7 +1468,7 @@
                     setPartnerships([]);
                     setFallOfWickets([]);
                     setOverRuns([]);
-                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: 0, batsman2: 1 });
+                    setCurrentPartnership({ runs: 0, balls: 0, batsman1: 0, batsman2: 1, batsman1Runs: 0, batsman2Runs: 0, batsman1Balls: 0, batsman2Balls: 0 });
                     setExtras({ wides: 0, noBalls: 0, byes: 0, legByes: 0 });
                     setRetiredBatsmen([]);
                 } else {
@@ -5183,17 +5217,31 @@
                                                 <div className="mb-6">
                                                     <h4 className="text-lg font-bold mb-3 text-purple-700">Partnerships</h4>
                                                     <div className="space-y-2">
-                                                        {innings1Data.partnerships.map((partnership, idx) => (
-                                                            <div key={idx} className="bg-white p-3 rounded-lg">
-                                                                <div className="flex justify-between items-center">
-                                                                    <div>
-                                                                        <span className="font-bold text-lg">{partnership.runs} runs</span>
-                                                                        <span className="text-gray-600 ml-2">({partnership.balls} balls)</span>
+                                                        {innings1Data.partnerships.map((partnership, idx) => {
+                                                            const innings1Team = innings1Data.battingTeam || (battingTeam === 'team2' ? 'team1' : 'team2');
+                                                            const batsman1Name = (innings1Team === 'team1' ? team1Players : team2Players)[partnership.batsman1];
+                                                            const batsman2Name = (innings1Team === 'team1' ? team1Players : team2Players)[partnership.batsman2];
+
+                                                            return (
+                                                                <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
+                                                                    <div className="flex justify-between items-center mb-2">
+                                                                        <div>
+                                                                            <span className="font-bold text-lg text-green-600">{partnership.runs} runs</span>
+                                                                            <span className="text-gray-600 ml-2">({partnership.balls} balls)</span>
+                                                                        </div>
+                                                                        <div className="text-sm text-gray-600">{partnership.retired ? 'Retired' : `Wicket ${partnership.wicket}`}</div>
                                                                     </div>
-                                                                    <div className="text-sm text-gray-600">{partnership.retired ? 'Retired' : `Wicket ${partnership.wicket}`}</div>
+                                                                    {partnership.batsman1Runs !== undefined && partnership.batsman2Runs !== undefined && (
+                                                                        <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-gray-200">
+                                                                            <div className="flex justify-between">
+                                                                                <span>{batsman1Name}: <span className="font-semibold">{partnership.batsman1Runs} ({partnership.batsman1Balls})</span></span>
+                                                                                <span>{batsman2Name}: <span className="font-semibold">{partnership.batsman2Runs} ({partnership.batsman2Balls})</span></span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
@@ -5248,26 +5296,47 @@
                                             <div className="mb-6">
                                                 <h4 className="text-lg font-bold mb-3 text-purple-700">Partnerships</h4>
                                                 <div className="space-y-2">
-                                                    {partnerships.map((partnership, idx) => (
-                                                        <div key={idx} className="bg-white p-3 rounded-lg">
-                                                            <div className="flex justify-between items-center">
-                                                                <div>
-                                                                    <span className="font-bold text-lg">{partnership.runs} runs</span>
-                                                                    <span className="text-gray-600 ml-2">({partnership.balls} balls)</span>
+                                                    {partnerships.map((partnership, idx) => {
+                                                        const batsman1Name = (battingTeam === 'team1' ? team1Players : team2Players)[partnership.batsman1];
+                                                        const batsman2Name = (battingTeam === 'team1' ? team1Players : team2Players)[partnership.batsman2];
+
+                                                        return (
+                                                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <div>
+                                                                        <span className="font-bold text-lg text-green-600">{partnership.runs} runs</span>
+                                                                        <span className="text-gray-600 ml-2">({partnership.balls} balls)</span>
+                                                                    </div>
+                                                                    <div className="text-sm text-gray-600">{partnership.retired ? 'Retired' : `Wicket ${partnership.wicket}`}</div>
                                                                 </div>
-                                                                <div className="text-sm text-gray-600">{partnership.retired ? 'Retired' : `Wicket ${partnership.wicket}`}</div>
+                                                                {partnership.batsman1Runs !== undefined && partnership.batsman2Runs !== undefined && (
+                                                                    <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-gray-200">
+                                                                        <div className="flex justify-between">
+                                                                            <span>{batsman1Name}: <span className="font-semibold">{partnership.batsman1Runs} ({partnership.batsman1Balls})</span></span>
+                                                                            <span>{batsman2Name}: <span className="font-semibold">{partnership.batsman2Runs} ({partnership.batsman2Balls})</span></span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                     {currentPartnership.runs > 0 && !matchComplete && (
                                                         <div className="bg-purple-100 p-3 rounded-lg border-2 border-purple-300">
-                                                            <div className="flex justify-between items-center">
+                                                            <div className="flex justify-between items-center mb-2">
                                                                 <div>
-                                                                    <span className="font-bold text-lg">{currentPartnership.runs} runs</span>
+                                                                    <span className="font-bold text-lg text-purple-700">{currentPartnership.runs} runs</span>
                                                                     <span className="text-gray-600 ml-2">({currentPartnership.balls} balls)</span>
                                                                 </div>
                                                                 <div className="text-sm text-purple-600 font-semibold">Current Partnership</div>
                                                             </div>
+                                                            {currentPartnership.batsman1Runs !== undefined && currentPartnership.batsman2Runs !== undefined && (
+                                                                <div className="text-sm text-gray-700 mt-2 pt-2 border-t border-purple-300">
+                                                                    <div className="flex justify-between">
+                                                                        <span>{(battingTeam === 'team1' ? team1Players : team2Players)[currentPartnership.batsman1]}: <span className="font-semibold">{currentPartnership.batsman1Runs} ({currentPartnership.batsman1Balls})</span></span>
+                                                                        <span>{(battingTeam === 'team1' ? team1Players : team2Players)[currentPartnership.batsman2]}: <span className="font-semibold">{currentPartnership.batsman2Runs} ({currentPartnership.batsman2Balls})</span></span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
