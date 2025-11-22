@@ -217,6 +217,29 @@
             const [selectedPlayer, setSelectedPlayer] = useState(null);
             const [statsFilter, setStatsFilter] = useState('all'); // 'all', 'batting', 'bowling'
 
+            // Ball-by-ball filter state
+            const [ballFilters, setBallFilters] = useState({
+                all: true,
+                dots: false,
+                singles: false,
+                boundaries: false,
+                sixes: false,
+                wickets: false,
+                extras: false
+            });
+
+            // Analytics filter state
+            const [analyticsFilters, setAnalyticsFilters] = useState({
+                minRuns: 0,
+                minBalls: 0,
+                minStrikeRate: 0,
+                maxStrikeRate: 300,
+                minBoundaries: 0,
+                minOvers: 0,
+                maxEconomy: 20,
+                minWickets: 0
+            });
+
             const currentTeamName = battingTeam === 'team1' ? team1Name : team2Name;
             const bowlingTeamName = battingTeam === 'team1' ? team2Name : team1Name;
             const currentPlayers = battingTeam === 'team1' ? team1Players : team2Players;
@@ -268,6 +291,68 @@
                 return overs;
             };
 
+            // Helper function to filter balls based on active filters
+            const filterBalls = (ballHistory) => {
+                // If "All" is selected, return all balls
+                if (ballFilters.all) {
+                    return ballHistory;
+                }
+
+                // Check if any specific filter is active
+                const hasActiveFilter = Object.entries(ballFilters).some(([key, value]) => key !== 'all' && value);
+
+                // If no filters are active, return all balls
+                if (!hasActiveFilter) {
+                    return ballHistory;
+                }
+
+                // Filter based on active filters
+                return ballHistory.filter(ball => {
+                    if (ballFilters.wickets && ball.wicket) return true;
+                    if (ballFilters.extras && ball.extra) return true;
+                    if (ballFilters.sixes && ball.runs === 6 && !ball.extra) return true;
+                    if (ballFilters.boundaries && ball.runs === 4 && !ball.extra) return true;
+                    if (ballFilters.singles && ball.runs >= 1 && ball.runs <= 3 && !ball.extra && !ball.wicket) return true;
+                    if (ballFilters.dots && ball.runs === 0 && !ball.extra && !ball.wicket) return true;
+                    return false;
+                });
+            };
+
+            // Toggle ball filter
+            const toggleBallFilter = (filterName) => {
+                if (filterName === 'all') {
+                    setBallFilters({
+                        all: true,
+                        dots: false,
+                        singles: false,
+                        boundaries: false,
+                        sixes: false,
+                        wickets: false,
+                        extras: false
+                    });
+                } else {
+                    setBallFilters(prev => ({
+                        ...prev,
+                        all: false,
+                        [filterName]: !prev[filterName]
+                    }));
+                }
+            };
+
+            // Reset analytics filters
+            const resetAnalyticsFilters = () => {
+                setAnalyticsFilters({
+                    minRuns: 0,
+                    minBalls: 0,
+                    minStrikeRate: 0,
+                    maxStrikeRate: 300,
+                    minBoundaries: 0,
+                    minOvers: 0,
+                    maxEconomy: 20,
+                    minWickets: 0
+                });
+            };
+
             const formats = [
                 { name: 'T10', overs: 10, desc: 'Super fast format' },
                 { name: 'T20', overs: 20, desc: 'Most popular format' },
@@ -313,6 +398,26 @@
                     const loadedTeams = localStorage.getItem('cricketTeams');
                     if (loadedTeams) {
                         setSavedTeams(JSON.parse(loadedTeams));
+                    } else {
+                        // Initialize with two default test teams
+                        const defaultTeams = [
+                            {
+                                id: 'test-team-1',
+                                name: 'Mumbai Indians',
+                                players: ['Rohit Sharma', 'Ishan Kishan', 'Suryakumar Yadav', 'Tilak Varma', 'Hardik Pandya', 'Kieron Pollard', 'Tim David', 'Jasprit Bumrah', 'Jofra Archer', 'Piyush Chawla', 'Kumar Kartikeya'],
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            },
+                            {
+                                id: 'test-team-2',
+                                name: 'Chennai Super Kings',
+                                players: ['MS Dhoni', 'Ruturaj Gaikwad', 'Devon Conway', 'Ajinkya Rahane', 'Shivam Dube', 'Ravindra Jadeja', 'Moeen Ali', 'Deepak Chahar', 'Tushar Deshpande', 'Maheesh Theekshana', 'Matheesha Pathirana'],
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            }
+                        ];
+                        setSavedTeams(defaultTeams);
+                        localStorage.setItem('cricketTeams', JSON.stringify(defaultTeams));
                     }
                 }
             }, [user, authLoading]);
@@ -1143,6 +1248,7 @@
                         batsman2Balls: striker === prev.batsman2 ? prev.batsman2Balls + 1 : prev.batsman2Balls
                     }));
 
+                    // Swap strike on odd runs
                     if (runsScored % 2 !== 0) {
                         [newStriker, newNonStriker] = [nonStriker, striker];
                     }
@@ -1169,7 +1275,7 @@
 
                     // OVER COMPLETION RULES
                     // 1. Swap strike (batsmen change ends)
-                    [newStriker, newNonStriker] = [nonStriker, striker];
+                    [newStriker, newNonStriker] = [newNonStriker, newStriker];
 
                     // 3. Show over complete notification (only if innings continues)
                     // Check if this over completes the innings/match BEFORE showing notifications
@@ -5266,8 +5372,55 @@
                                             {innings1Data.ballHistory.length > 0 && (
                                                 <div>
                                                     <h4 className="text-lg font-bold mb-3 text-gray-700">Ball by Ball Commentary</h4>
+
+                                                    {/* Filter Buttons */}
+                                                    <div className="mb-4 flex flex-wrap gap-2">
+                                                        <button
+                                                            onClick={() => toggleBallFilter('all')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.all ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            All Balls
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('dots')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.dots ? 'bg-gray-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            Dots •
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('singles')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.singles ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            1s, 2s, 3s
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('boundaries')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.boundaries ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            Fours 4️⃣
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('sixes')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.sixes ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            Sixes 6️⃣
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('wickets')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.wickets ? 'bg-red-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            Wickets 🔴
+                                                        </button>
+                                                        <button
+                                                            onClick={() => toggleBallFilter('extras')}
+                                                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.extras ? 'bg-yellow-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                        >
+                                                            Extras
+                                                        </button>
+                                                    </div>
+
                                                     <div className="bg-white p-4 rounded-lg space-y-4">
-                                                        {groupBallsByOver(innings1Data.ballHistory).map((over, overIndex) => (
+                                                        {groupBallsByOver(filterBalls(innings1Data.ballHistory)).map((over, overIndex) => (
                                                             <div key={overIndex} className="border-l-4 border-green-500 pl-3">
                                                                 <div className="text-xs font-semibold text-green-700 mb-2">Over {over.overNum + 1}</div>
                                                                 <div className="flex gap-2 flex-wrap">
@@ -5363,8 +5516,55 @@
                                         {ballHistory.length > 0 && (
                                             <div>
                                                 <h4 className="text-lg font-bold mb-3 text-gray-700">Ball by Ball Commentary</h4>
+
+                                                {/* Filter Buttons */}
+                                                <div className="mb-4 flex flex-wrap gap-2">
+                                                    <button
+                                                        onClick={() => toggleBallFilter('all')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.all ? 'bg-green-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        All Balls
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('dots')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.dots ? 'bg-gray-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        Dots •
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('singles')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.singles ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        1s, 2s, 3s
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('boundaries')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.boundaries ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        Fours 4️⃣
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('sixes')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.sixes ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        Sixes 6️⃣
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('wickets')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.wickets ? 'bg-red-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        Wickets 🔴
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleBallFilter('extras')}
+                                                        className={`px-4 py-2 rounded-lg font-semibold transition-all ${ballFilters.extras ? 'bg-yellow-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                                    >
+                                                        Extras
+                                                    </button>
+                                                </div>
+
                                                 <div className="bg-white p-4 rounded-lg space-y-4">
-                                                    {groupBallsByOver(ballHistory).map((over, overIndex) => (
+                                                    {groupBallsByOver(filterBalls(ballHistory)).map((over, overIndex) => (
                                                         <div key={overIndex} className="border-l-4 border-green-500 pl-3">
                                                             <div className="text-xs font-semibold text-green-700 mb-2">Over {over.overNum + 1}</div>
                                                             <div className="flex gap-2 flex-wrap">
@@ -5828,6 +6028,130 @@
                                 <div>
                                     <h2 className="text-2xl font-bold mb-6 text-gray-800">📈 Advanced Analytics</h2>
 
+                                    {/* Analytics Filters Control Panel */}
+                                    <div className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-200">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold text-indigo-900">🔍 Filter Analytics</h3>
+                                            <button
+                                                onClick={resetAnalyticsFilters}
+                                                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all font-semibold text-sm"
+                                            >
+                                                Reset Filters
+                                            </button>
+                                        </div>
+
+                                        {/* Batting Filters */}
+                                        <div className="mb-4">
+                                            <h4 className="text-sm font-bold text-gray-700 mb-3">⚾ Batting Filters</h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Runs</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={analyticsFilters.minRuns}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minRuns: parseInt(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Balls Faced</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={analyticsFilters.minBalls}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minBalls: parseInt(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Strike Rate</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={analyticsFilters.minStrikeRate}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minStrikeRate: parseInt(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Boundaries (4s+6s)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={analyticsFilters.minBoundaries}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minBoundaries: parseInt(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Bowling Filters */}
+                                        <div>
+                                            <h4 className="text-sm font-bold text-gray-700 mb-3">🎳 Bowling Filters</h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Overs Bowled</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.1"
+                                                        value={analyticsFilters.minOvers}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minOvers: parseFloat(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Max Economy</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.5"
+                                                        value={analyticsFilters.maxEconomy}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, maxEconomy: parseFloat(e.target.value) || 20 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="20"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600 block mb-1">Min Wickets</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={analyticsFilters.minWickets}
+                                                        onChange={(e) => setAnalyticsFilters(prev => ({ ...prev, minWickets: parseInt(e.target.value) || 0 }))}
+                                                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                                                        placeholder="0"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Active Filters Summary */}
+                                        {(analyticsFilters.minRuns > 0 || analyticsFilters.minBalls > 0 || analyticsFilters.minStrikeRate > 0 ||
+                                          analyticsFilters.minBoundaries > 0 || analyticsFilters.minOvers > 0 || analyticsFilters.maxEconomy < 20 ||
+                                          analyticsFilters.minWickets > 0) && (
+                                            <div className="mt-4 p-3 bg-white rounded-lg border border-indigo-300">
+                                                <div className="text-xs font-semibold text-indigo-900 mb-2">Active Filters:</div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {analyticsFilters.minRuns > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min Runs: {analyticsFilters.minRuns}</span>}
+                                                    {analyticsFilters.minBalls > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min Balls: {analyticsFilters.minBalls}</span>}
+                                                    {analyticsFilters.minStrikeRate > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min SR: {analyticsFilters.minStrikeRate}</span>}
+                                                    {analyticsFilters.minBoundaries > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min Boundaries: {analyticsFilters.minBoundaries}</span>}
+                                                    {analyticsFilters.minOvers > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min Overs: {analyticsFilters.minOvers}</span>}
+                                                    {analyticsFilters.maxEconomy < 20 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Max Economy: {analyticsFilters.maxEconomy}</span>}
+                                                    {analyticsFilters.minWickets > 0 && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">Min Wickets: {analyticsFilters.minWickets}</span>}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Manhattan Chart - Over-by-Over Runs */}
                                     <div className="mb-6 bg-white p-6 rounded-xl border-2 border-gray-200 shadow-lg">
                                         <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
@@ -6022,6 +6346,10 @@
                                                     <h4 className="text-lg font-bold mb-4 text-gray-800">Batsmen Runs Distribution</h4>
                                                     <div className="space-y-3">
                                                         {Object.entries(innings1Data.batsmanStats)
+                                                            .filter(([, stats]) =>
+                                                                stats.runs >= analyticsFilters.minRuns &&
+                                                                stats.balls >= analyticsFilters.minBalls
+                                                            )
                                                             .sort(([, a], [, b]) => b.runs - a.runs)
                                                             .map(([idx, stats]) => (
                                                                 <div key={idx} className="space-y-1">
@@ -6047,7 +6375,11 @@
                                                     <h4 className="text-lg font-bold mb-4 text-gray-800">Strike Rate Analysis</h4>
                                                     <div className="space-y-3">
                                                         {Object.entries(innings1Data.batsmanStats)
-                                                            .filter(([, stats]) => stats.balls >= 3)
+                                                            .filter(([, stats]) =>
+                                                                stats.balls >= Math.max(3, analyticsFilters.minBalls) &&
+                                                                parseFloat(stats.strikeRate) >= analyticsFilters.minStrikeRate &&
+                                                                stats.runs >= analyticsFilters.minRuns
+                                                            )
                                                             .sort(([, a], [, b]) => parseFloat(b.strikeRate) - parseFloat(a.strikeRate))
                                                             .map(([idx, stats]) => (
                                                                 <div key={idx} className="space-y-1">
@@ -6087,6 +6419,10 @@
                                                 <h4 className="text-lg font-bold mb-4 text-gray-800">Batsmen Runs Distribution</h4>
                                                 <div className="space-y-3">
                                                     {Object.entries(batsmanStats)
+                                                        .filter(([, stats]) =>
+                                                            stats.runs >= analyticsFilters.minRuns &&
+                                                            stats.balls >= analyticsFilters.minBalls
+                                                        )
                                                         .sort(([, a], [, b]) => b.runs - a.runs)
                                                         .map(([idx, stats]) => (
                                                             <div key={idx} className="space-y-1">
@@ -6112,7 +6448,11 @@
                                                 <h4 className="text-lg font-bold mb-4 text-gray-800">Strike Rate Analysis</h4>
                                                 <div className="space-y-3">
                                                     {Object.entries(batsmanStats)
-                                                        .filter(([, stats]) => stats.balls >= 3)
+                                                        .filter(([, stats]) =>
+                                                            stats.balls >= Math.max(3, analyticsFilters.minBalls) &&
+                                                            parseFloat(stats.strikeRate) >= analyticsFilters.minStrikeRate &&
+                                                            stats.runs >= analyticsFilters.minRuns
+                                                        )
                                                         .sort(([, a], [, b]) => parseFloat(b.strikeRate) - parseFloat(a.strikeRate))
                                                         .map(([idx, stats]) => (
                                                             <div key={idx} className="space-y-1">
@@ -6144,7 +6484,11 @@
                                             <h3 className="text-lg font-bold mb-4 text-gray-800">Boundary Hitters</h3>
                                             <div className="space-y-4">
                                                 {Object.entries(batsmanStats)
-                                                    .filter(([, stats]) => stats.fours + stats.sixes > 0)
+                                                    .filter(([, stats]) =>
+                                                        (stats.fours + stats.sixes) >= Math.max(0, analyticsFilters.minBoundaries) &&
+                                                        stats.runs >= analyticsFilters.minRuns &&
+                                                        stats.balls >= analyticsFilters.minBalls
+                                                    )
                                                     .sort(([, a], [, b]) => (b.fours + b.sixes) - (a.fours + a.sixes))
                                                     .map(([idx, stats]) => (
                                                         <div key={idx} className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg">
@@ -6183,7 +6527,12 @@
                                             <h3 className="text-lg font-bold mb-4 text-gray-800">Bowling Economy</h3>
                                             <div className="space-y-3">
                                                 {Object.entries(bowlerStats)
-                                                    .filter(([, stats]) => stats.overs > 0 || stats.balls > 0)
+                                                    .filter(([, stats]) => {
+                                                        const totalOvers = stats.overs + (stats.balls / 6);
+                                                        return (totalOvers >= analyticsFilters.minOvers) &&
+                                                               (parseFloat(stats.economy) <= analyticsFilters.maxEconomy) &&
+                                                               (stats.wickets >= analyticsFilters.minWickets);
+                                                    })
                                                     .sort(([, a], [, b]) => parseFloat(a.economy) - parseFloat(b.economy))
                                                     .map(([idx, stats]) => (
                                                         <div key={idx} className="space-y-1">
