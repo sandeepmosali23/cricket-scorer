@@ -12,7 +12,9 @@
       "Bash(node -c /Users/sandeepreddy/Downloads/cricket-scorer-dev/public/index.html)",
       "Bash(awk:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(firebase login:*)"
     ],
     "deny": [],
     "ask": []
