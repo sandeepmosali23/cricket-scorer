@@ -262,6 +262,9 @@
                 extras: false
             });
 
+            // Auto-save status indicator
+            const [showAutoSaveIndicator, setShowAutoSaveIndicator] = useState(false);
+
             // Analytics filter state
             const [analyticsFilters, setAnalyticsFilters] = useState({
                 minRuns: 0,
@@ -496,6 +499,157 @@
             useEffect(() => {
                 console.log('🔍 Modal state changed - showMatchResults:', showMatchResults);
             }, [showMatchResults]);
+
+            // Auto-save in-progress match to localStorage
+            useEffect(() => {
+                // Only auto-save if match is in progress (setup complete but not finished)
+                if (setupComplete && !matchComplete) {
+                    const autoSaveData = {
+                        // Match info
+                        team1Name,
+                        team2Name,
+                        team1Players,
+                        team2Players,
+                        totalOvers,
+                        matchFormat,
+
+                        // Toss data
+                        tossWinner,
+                        tossDecision,
+
+                        // Current match state
+                        battingTeam,
+                        innings,
+                        runs,
+                        wickets,
+                        overs,
+                        balls,
+                        striker,
+                        nonStriker,
+                        bowler,
+                        target,
+
+                        // History and stats
+                        ballHistory,
+                        batsmanStats,
+                        bowlerStats,
+                        partnerships,
+                        fallOfWickets,
+                        overRuns,
+                        currentPartnership,
+                        extras,
+                        retiredBatsmen,
+
+                        // Innings data
+                        innings1Data,
+                        innings2Data,
+
+                        // Metadata
+                        lastBowler,
+                        matchStatus,
+                        playerOfTheMatch,
+                        potmReason,
+                        guestScorerName,
+
+                        // Auto-save metadata
+                        autoSaved: true,
+                        lastAutoSave: new Date().toISOString()
+                    };
+
+                    localStorage.setItem('cricketMatchInProgress', JSON.stringify(autoSaveData));
+                    console.log('💾 Auto-saved match state');
+
+                    // Show save indicator
+                    setShowAutoSaveIndicator(true);
+                    setTimeout(() => setShowAutoSaveIndicator(false), 2000);
+                }
+
+                // Clear auto-save when match is complete
+                if (matchComplete) {
+                    localStorage.removeItem('cricketMatchInProgress');
+                    console.log('🗑️ Cleared auto-save (match complete)');
+                }
+            }, [
+                setupComplete, matchComplete, runs, wickets, overs, balls,
+                striker, nonStriker, bowler, ballHistory, batsmanStats,
+                bowlerStats, partnerships, fallOfWickets, currentPartnership, extras
+            ]);
+
+            // Auto-restore in-progress match on page load
+            useEffect(() => {
+                const autoSavedMatch = localStorage.getItem('cricketMatchInProgress');
+
+                if (autoSavedMatch && !setupComplete) {
+                    try {
+                        const match = JSON.parse(autoSavedMatch);
+                        const lastSaveTime = new Date(match.lastAutoSave);
+                        const hoursSinceLastSave = (new Date() - lastSaveTime) / (1000 * 60 * 60);
+
+                        // Only auto-restore if match was saved less than 24 hours ago
+                        if (hoursSinceLastSave < 24) {
+                            const shouldRestore = window.confirm(
+                                `📋 Found an in-progress match!\n\n` +
+                                `${match.team1Name} vs ${match.team2Name}\n` +
+                                `Last saved: ${new Date(match.lastAutoSave).toLocaleString()}\n\n` +
+                                `Would you like to continue this match?`
+                            );
+
+                            if (shouldRestore) {
+                                // Restore all state
+                                setTeam1Name(match.team1Name);
+                                setTeam2Name(match.team2Name);
+                                setTeam1Players(match.team1Players);
+                                setTeam2Players(match.team2Players);
+                                setTotalOvers(match.totalOvers);
+                                setMatchFormat(match.matchFormat);
+                                setTossWinner(match.tossWinner);
+                                setTossDecision(match.tossDecision);
+                                setTossComplete(true);
+                                setBattingTeam(match.battingTeam);
+                                setInnings(match.innings);
+                                setRuns(match.runs);
+                                setWickets(match.wickets);
+                                setOvers(match.overs);
+                                setBalls(match.balls);
+                                setStriker(match.striker);
+                                setNonStriker(match.nonStriker);
+                                setBowler(match.bowler);
+                                setTarget(match.target);
+                                setBallHistory(match.ballHistory);
+                                setBatsmanStats(match.batsmanStats);
+                                setBowlerStats(match.bowlerStats);
+                                setPartnerships(match.partnerships);
+                                setFallOfWickets(match.fallOfWickets);
+                                setOverRuns(match.overRuns);
+                                setCurrentPartnership(match.currentPartnership);
+                                setExtras(match.extras);
+                                setRetiredBatsmen(match.retiredBatsmen || []);
+                                setInnings1Data(match.innings1Data);
+                                setInnings2Data(match.innings2Data);
+                                setLastBowler(match.lastBowler);
+                                setMatchStatus(match.matchStatus || 'in-progress');
+                                setPlayerOfTheMatch(match.playerOfTheMatch);
+                                setPotmReason(match.potmReason || '');
+                                setGuestScorerName(match.guestScorerName || '');
+                                setSetupComplete(true);
+
+                                console.log('✅ Restored in-progress match from auto-save');
+                            } else {
+                                // User declined, clear the auto-save
+                                localStorage.removeItem('cricketMatchInProgress');
+                                console.log('🗑️ User declined restore, cleared auto-save');
+                            }
+                        } else {
+                            // Match is too old, clear it
+                            localStorage.removeItem('cricketMatchInProgress');
+                            console.log('🗑️ Auto-save too old (>24h), cleared');
+                        }
+                    } catch (error) {
+                        console.error('❌ Error restoring auto-saved match:', error);
+                        localStorage.removeItem('cricketMatchInProgress');
+                    }
+                }
+            }, []); // Run only once on mount
 
             // Authentication Functions
             const signUpWithEmail = async () => {
@@ -2391,6 +2545,13 @@
                                 </div>
 
                                 <div className="flex items-center gap-3">
+                                    {/* Auto-save indicator */}
+                                    {showAutoSaveIndicator && setupComplete && !matchComplete && (
+                                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-3 py-1.5 rounded-lg text-sm font-medium animate-fade-in">
+                                            <span className="text-base">💾</span>
+                                            <span>Saved</span>
+                                        </div>
+                                    )}
                                     {user ? (
                                         <div className="relative">
                                             <button
