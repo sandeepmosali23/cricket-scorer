@@ -230,6 +230,8 @@
             const [user, setUser] = useState(null);
             const [userMode, setUserMode] = useState(null); // null = not chosen, 'guest', 'logged-in'
             const [showUserModeModal, setShowUserModeModal] = useState(false);
+            const [guestScorerName, setGuestScorerName] = useState('');
+            const [showGuestNameModal, setShowGuestNameModal] = useState(false);
             const [authLoading, setAuthLoading] = useState(true);
             const [showAuthModal, setShowAuthModal] = useState(false);
             const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
@@ -3739,9 +3741,8 @@
                                         {/* Guest Mode */}
                                         <div className="border-2 border-gray-200 rounded-xl p-6 hover:border-green-500 hover:shadow-lg transition-all cursor-pointer"
                                              onClick={() => {
-                                                 setUserMode('guest');
                                                  setShowUserModeModal(false);
-                                                 setShowTossModal(true);
+                                                 setShowGuestNameModal(true);
                                              }}>
                                             <div className="text-center">
                                                 <div className="text-6xl mb-4">🎯</div>
@@ -3829,6 +3830,82 @@
                                                 Login here
                                             </button>
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Guest Scorer Name Modal */}
+                    {showGuestNameModal && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                                <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6">
+                                    <h2 className="text-3xl font-bold">✍️ Scorer Details</h2>
+                                    <p className="text-sm opacity-90 mt-1">Let us know who's scoring this match</p>
+                                </div>
+
+                                <div className="p-6">
+                                    <div className="mb-6">
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                            Your Name <span className="text-gray-400">(Optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={guestScorerName}
+                                            onChange={(e) => setGuestScorerName(e.target.value)}
+                                            placeholder="e.g., John Smith"
+                                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-lg"
+                                            autoFocus
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    setUserMode('guest');
+                                                    setShowGuestNameModal(false);
+                                                    setShowTossModal(true);
+                                                }
+                                            }}
+                                        />
+                                        <p className="text-xs text-gray-500 mt-2">
+                                            This will appear as "Scored by [Your Name]" in the scorecard
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded">
+                                        <div className="flex items-start gap-3">
+                                            <span className="text-2xl">💡</span>
+                                            <div className="text-sm text-gray-700">
+                                                <p className="font-semibold mb-1">Why we ask:</p>
+                                                <ul className="space-y-1 text-xs">
+                                                    <li>• Adds credibility to your scorecard</li>
+                                                    <li>• Useful for official matches</li>
+                                                    <li>• You can skip this if you prefer</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => {
+                                                setGuestScorerName('');
+                                                setUserMode('guest');
+                                                setShowGuestNameModal(false);
+                                                setShowTossModal(true);
+                                            }}
+                                            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-xl transition-all"
+                                        >
+                                            Skip
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setUserMode('guest');
+                                                setShowGuestNameModal(false);
+                                                setShowTossModal(true);
+                                            }}
+                                            className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+                                        >
+                                            Continue
+                                        </button>
                                     </div>
                                 </div>
                             </div>
