@@ -1,6 +1,9 @@
-# Cricket Scorer Pro - Development Version
+# 🏏 Cricket Scorer Pro
 
-Professional cricket scoring application - **Development Environment**
+> Professional cricket scoring made easy. A free, feature-rich web application for scoring cricket matches with real-time statistics, ball-by-ball commentary, and detailed analytics.
+
+[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://cricketscorers.netlify.app)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/YOUR_BADGE_ID/deploy-status)](https://app.netlify.com/sites/cricketscorers/deploys)
 
 ## 🚀 Quick Start
 

@@ -10,7 +10,9 @@
       "Bash(lsof:*)",
       "Bash(xargs kill:*)",
       "Bash(node -c /Users/sandeepreddy/Downloads/cricket-scorer-dev/public/index.html)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

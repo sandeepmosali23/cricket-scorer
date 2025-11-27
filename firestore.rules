@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Matches collection
+    match /matches/{matchId} {
+      // Anyone can read matches
+      allow read: if true;
+
+      // Anyone can create matches (for anonymous users)
+      allow create: if true;
+
+      // Only allow updates to matches created in the last 7 days
+      // This prevents old matches from being modified
+      allow update, delete: if request.time < resource.data.createdAt + duration.value(7, 'd');
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      // Anyone can read teams
+      allow read: if true;
+
+      // Anyone can create teams
+      allow create: if true;
+
+      // Only allow updates to teams created in the last 30 days
+      allow update, delete: if request.time < resource.data.createdAt + duration.value(30, 'd');
+    }
+
+    // Prevent access to any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
