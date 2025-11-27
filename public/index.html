@@ -458,6 +458,7 @@
             useEffect(() => {
                 if (!auth) {
                     setAuthLoading(false);
+                    // If Firebase auth is not available, don't set userMode (let modal show)
                     return;
                 }
 
@@ -472,6 +473,10 @@
                         loadUserTeams(user.uid);
                         fetchCloudMatches();
                     } else {
+                        // User is logged out or not logged in
+                        console.log('ℹ️ User not logged in');
+                        // Reset user mode to null so modal shows on next match start
+                        setUserMode(null);
                         // Clear user data when logged out
                         setSavedTeams([]);
                         setCloudMatches([]);
