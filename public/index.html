@@ -466,6 +466,8 @@
                     setAuthLoading(false);
                     if (user) {
                         console.log('✅ User logged in:', user.email);
+                        // Set user mode to logged-in
+                        setUserMode('logged-in');
                         // Load user-specific data from Firestore
                         loadUserTeams(user.uid);
                         fetchCloudMatches();
@@ -522,7 +524,10 @@
                     setAuthEmail('');
                     setAuthPassword('');
                     setAuthName('');
+                    setUserMode('logged-in');
                     alert(`✅ Welcome ${authName}! Your account has been created.`);
+                    // Proceed to toss if coming from match setup
+                    setShowTossModal(true);
                 } catch (error) {
                     console.error('Signup error:', error);
                     setAuthError(error.message);
@@ -546,7 +551,10 @@
                     setShowAuthModal(false);
                     setAuthEmail('');
                     setAuthPassword('');
+                    setUserMode('logged-in');
                     alert('✅ Welcome back!');
+                    // Proceed to toss if coming from match setup
+                    setShowTossModal(true);
                 } catch (error) {
                     console.error('Login error:', error);
                     setAuthError(error.message);
