@@ -1759,6 +1759,79 @@
                 console.log('✅ Ball undone successfully');
             };
 
+            const completeOverManually = () => {
+                if (matchComplete) return;
+
+                // Check if over is already complete
+                if (balls === 0) {
+                    alert('⚠️ The over is already complete. No balls have been bowled yet.');
+                    return;
+                }
+
+                const confirmation = confirm(
+                    `🔄 Complete current over manually?\n\n` +
+                    `Current: ${overs}.${balls} overs\n` +
+                    `Bowler: ${bowlingPlayers[bowler]}\n\n` +
+                    `This will:\n` +
+                    `• Mark the over as complete (${balls}/6 balls bowled)\n` +
+                    `• Swap striker and non-striker\n` +
+                    `• Require you to select a new bowler\n\n` +
+                    `Use this for tactical changes, injuries, or other situations.\n\n` +
+                    `Continue?`
+                );
+
+                if (!confirmation) return;
+
+                // Calculate runs in this partial over for stats
+                const currentOverBalls = ballHistory.filter(b => b.over === overs);
+                const overRunsThisOver = currentOverBalls.reduce((sum, b) => {
+                    if (b.extra === 'wide' || b.extra === 'noball') {
+                        return sum + (b.extraRuns + 1);
+                    }
+                    return sum + b.runs;
+                }, 0);
+
+                // Add to over runs tracking
+                setOverRuns(prev => [...prev, overRunsThisOver]);
+
+                // Complete the over
+                const newOvers = overs + 1;
+                const newBalls = 0;
+
+                // Swap striker and non-striker
+                const newStriker = nonStriker;
+                const newNonStriker = striker;
+
+                // Update state
+                setOvers(newOvers);
+                setBalls(newBalls);
+                setStriker(newStriker);
+                setNonStriker(newNonStriker);
+                setCurrentOver([]);
+
+                // Save previous bowler for consecutive over check
+                setPreviousBowler(bowler);
+                setLastBowler(bowler);
+
+                // Check if innings/match complete
+                if (newOvers >= totalOvers) {
+                    console.log('🏁 OVERS COMPLETE! Innings ended');
+                    setTimeout(() => {
+                        alert(`🏁 OVERS COMPLETE! ${newOvers} overs bowled`);
+                        endInnings(runs, wickets, newOvers, newBalls);
+                    }, 100);
+                    return;
+                }
+
+                console.log(`✅ Over completed manually: ${overs}.${balls} → ${newOvers}.${newBalls}`);
+                console.log(`   Striker: ${currentPlayers[newStriker]} | Non-Striker: ${currentPlayers[newNonStriker]}`);
+
+                // Show success message
+                setTimeout(() => {
+                    alert(`✅ Over completed!\n\nNew over ${newOvers + 1} starting.\nPlease select a new bowler.`);
+                }, 100);
+            };
+
             const endInnings = (finalRuns, finalWickets, finalOvers, finalBalls) => {
                 const inningsData = {
                     runs: finalRuns,
@@ -5586,13 +5659,22 @@
                                             <div className="flex justify-between items-center mb-2">
                                                 <label className="text-sm font-semibold text-gray-700">Current Bowler</label>
                                                 {!isViewerMode && (
-                                                    <button
-                                                        onClick={() => setShowChangeBowler(true)}
-                                                        disabled={matchComplete}
-                                                        className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-3 py-1 rounded no-print"
-                                                        title="Change bowler">
-                                                        🔄 Change
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => setShowChangeBowler(true)}
+                                                            disabled={matchComplete}
+                                                            className="text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-3 py-1 rounded no-print"
+                                                            title="Change bowler">
+                                                            🔄 Change
+                                                        </button>
+                                                        <button
+                                                            onClick={completeOverManually}
+                                                            disabled={matchComplete || balls === 0}
+                                                            className="text-xs bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white px-3 py-1 rounded no-print"
+                                                            title="Complete the current over manually (for tactical changes, injuries, etc.)">
+                                                            ⏭️ Complete Over
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
 
