@@ -1825,11 +1825,6 @@
 
                 console.log(`✅ Over completed manually: ${overs}.${balls} → ${newOvers}.${newBalls}`);
                 console.log(`   Striker: ${currentPlayers[newStriker]} | Non-Striker: ${currentPlayers[newNonStriker]}`);
-
-                // Show success message
-                setTimeout(() => {
-                    alert(`✅ Over completed!\n\nNew over ${newOvers + 1} starting.\nPlease select a new bowler.`);
-                }, 100);
             };
 
             const endInnings = (finalRuns, finalWickets, finalOvers, finalBalls) => {
