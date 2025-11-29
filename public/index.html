@@ -72,6 +72,7 @@
             scrollbar-width: thin;
             max-width: 100%;
             padding-bottom: 8px;
+            scroll-behavior: smooth;
         }
         .over-scroll-container::-webkit-scrollbar {
             height: 8px;
@@ -264,6 +265,9 @@
 
             // Auto-save status indicator
             const [showAutoSaveIndicator, setShowAutoSaveIndicator] = useState(false);
+
+            // Ref for auto-scrolling recent overs
+            const recentOversScrollRef = useRef(null);
 
             // Analytics filter state
             const [analyticsFilters, setAnalyticsFilters] = useState({
@@ -574,6 +578,14 @@
                 striker, nonStriker, bowler, ballHistory, batsmanStats,
                 bowlerStats, partnerships, fallOfWickets, currentPartnership, extras
             ]);
+
+            // Auto-scroll recent overs to show latest ball
+            useEffect(() => {
+                if (recentOversScrollRef.current && ballHistory.length > 0) {
+                    // Scroll to the end (rightmost) to show the latest ball
+                    recentOversScrollRef.current.scrollLeft = recentOversScrollRef.current.scrollWidth;
+                }
+            }, [ballHistory]);
 
             // Auto-restore in-progress match on page load
             useEffect(() => {
@@ -5539,7 +5551,7 @@
                                         {ballHistory.length > 0 && (
                                             <div className="mb-4">
                                                 <div className="text-sm font-semibold text-gray-700 mb-2">Recent Overs:</div>
-                                                <div className="over-scroll-container">
+                                                <div className="over-scroll-container" ref={recentOversScrollRef}>
                                                     <div className="flex gap-3 items-center" style={{minWidth: 'min-content'}}>
                                                         {groupBallsByOver(ballHistory).slice(-3).map((over, overIndex) => (
                                                             <React.Fragment key={overIndex}>
