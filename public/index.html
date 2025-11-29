@@ -1224,6 +1224,9 @@
 
                 // Check for over complete
                 let overCompleted = false;
+                // Track which end the out batsman was at (before any swap)
+                let outBatsmanWasStriker = true;
+
                 if (newBalls === 6) {
                     newOvers += 1;
                     newBalls = 0;
@@ -1237,7 +1240,11 @@
                     }, 0);
                     setOverRuns(prev => [...prev, overRunsThisOver]);
 
+                    // Swap striker and non-striker for next over
                     [newStriker, newNonStriker] = [nonStriker, striker];
+
+                    // Since we swapped, the out batsman (who was striker) is now at non-striker position
+                    outBatsmanWasStriker = false;
 
                     // Save previous bowler for consecutive over check
                     setPreviousBowler(bowler);
@@ -1307,7 +1314,9 @@
                 console.log('✅ Wicket processed - showing new batsman selection modal');
                 console.log('Out batsman:', currentPlayers[striker]);
                 console.log('Remaining wickets:', maxWickets - newWickets);
-                setOutBatsmanPosition('striker');
+                // Set the correct position based on whether over was completed
+                // If over completed, striker/non-striker were swapped, so out batsman is now at non-striker
+                setOutBatsmanPosition(outBatsmanWasStriker ? 'striker' : 'nonStriker');
                 setShowSelectNewBatsman(true);
 
                 // If over completed with this wicket, show bowler change modal after batsman is selected
