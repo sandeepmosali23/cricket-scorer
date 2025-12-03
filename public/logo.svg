@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background Circle -->
+  <circle cx="100" cy="100" r="95" fill="#16a34a" stroke="#15803d" stroke-width="3"/>
+
+  <!-- Cricket Ball (red) -->
+  <circle cx="130" cy="80" r="18" fill="#dc2626"/>
+  <!-- Ball seam -->
+  <path d="M 115 75 Q 130 70, 145 75" stroke="white" stroke-width="2" fill="none"/>
+  <path d="M 115 85 Q 130 90, 145 85" stroke="white" stroke-width="2" fill="none"/>
+
+  <!-- Cricket Bat -->
+  <g transform="translate(70, 60) rotate(-30)">
+    <!-- Bat handle -->
+    <rect x="15" y="0" width="8" height="35" fill="#8b4513" rx="2"/>
+    <rect x="16" y="8" width="6" height="3" fill="#654321"/>
+    <rect x="16" y="15" width="6" height="3" fill="#654321"/>
+    <rect x="16" y="22" width="6" height="3" fill="#654321"/>
+
+    <!-- Bat blade -->
+    <ellipse cx="19" cy="40" rx="12" ry="25" fill="#d4a574"/>
+    <!-- Wood grain lines -->
+    <line x1="19" y1="20" x2="19" y2="60" stroke="#8b6f47" stroke-width="1" opacity="0.5"/>
+    <line x1="15" y1="25" x2="15" y2="55" stroke="#8b6f47" stroke-width="0.5" opacity="0.3"/>
+    <line x1="23" y1="25" x2="23" y2="55" stroke="#8b6f47" stroke-width="0.5" opacity="0.3"/>
+  </g>
+
+  <!-- Text: Howzat -->
+  <text x="100" y="150" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="white" text-anchor="middle">
+    HOWZAT
+  </text>
+
+  <!-- Subtitle -->
+  <text x="100" y="170" font-family="Arial, sans-serif" font-size="11" fill="#fef08a" text-anchor="middle">
+    Cricket Scorer
+  </text>
+
+  <!-- Decorative arc at bottom -->
+  <path d="M 40 185 Q 100 175, 160 185" stroke="#fef08a" stroke-width="2" fill="none"/>
+</svg>
