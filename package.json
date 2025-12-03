@@ -1,7 +1,7 @@
 {
-  "name": "cricket-scorer-pro",
+  "name": "howzat",
   "version": "3.9.1",
-  "description": "Professional cricket scoring application with live scoring, advanced analytics, Firebase authentication and cloud storage with user-specific data isolation, user accounts with full personalization, match results viewer, dynamic player management with manual batsman selection, cricket over rules enforcement with automatic innings/match end detection supporting variable team sizes (5-11 players), enhanced home page, team library management system, comprehensive player statistics tracking, match abandonment feature with status tracking, cricket rules compliance (byes/leg-byes striker rotation, proper extras handling, comprehensive undo functionality), and toss functionality with decision tracking",
+  "description": "Howzat - Professional cricket scoring application with live scoring, advanced analytics, Firebase authentication and cloud storage with user-specific data isolation, user accounts with full personalization, match results viewer, dynamic player management with manual batsman selection, cricket over rules enforcement with automatic innings/match end detection supporting variable team sizes (5-11 players), enhanced home page, team library management system, comprehensive player statistics tracking, match abandonment feature with status tracking, cricket rules compliance (byes/leg-byes striker rotation, proper extras handling, comprehensive undo functionality), and toss functionality with decision tracking",
   "main": "public/index.html",
   "scripts": {
     "dev": "live-server public --port=3000 --open",
@@ -21,18 +21,19 @@
     "scoring",
     "react",
     "live-scoring",
-    "statistics"
+    "statistics",
+    "howzat"
   ],
-  "author": "Cricket Scorer Pro",
+  "author": "Howzat",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/cricket-scorer-pro.git"
+    "url": "https://github.com/sandeepmosali23/cricket-scorer.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/cricket-scorer-pro/issues"
+    "url": "https://github.com/sandeepmosali23/cricket-scorer/issues"
   },
-  "homepage": "https://github.com/yourusername/cricket-scorer-pro#readme",
+  "homepage": "https://github.com/sandeepmosali23/cricket-scorer#readme",
   "devDependencies": {
     "eslint": "^8.50.0",
     "live-server": "^1.2.2",

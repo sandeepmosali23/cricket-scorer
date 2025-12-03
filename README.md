@@ -1,4 +1,4 @@
-# 🏏 Cricket Scorer Pro
+# 🏏 Howzat
 
 > Professional cricket scoring made easy. A free, feature-rich web application for scoring cricket matches with real-time statistics, ball-by-ball commentary, and detailed analytics.
 
